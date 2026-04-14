@@ -1,0 +1,46 @@
+Hi. Where were we? Summarize the current status.
+What are you trying to do? There is no tests directory.
+Let's add another example like option, namely result. To rust/result.rs write a minimal version of Rust Result, with just is_ok/is_err/ok/err. See rust/option.rs for how it is done.
+Yes.
+Yes.
+That's unfortunate. For now, note the issue in PLAN.md and just get rid of ok and err methods.
+Yes.
+Let's reorganize Rust tests under rust so that they are Cargo packages and can be run with `cargo run` etc.
+No workspace for now.
+Use Rust 2024 edition.
+Let's write test_test.sh. test.sh tests rust2zig given input generates expected output. test_test.sh should test Rust input and Zig output builds, and when run generates the same expected output. Put expected example run output under out.
+I want to attack semantic information. For example, properly checking Option/Some/None is from core::option. Are you familiar with LSIF?
+You got that right. First, let's dump LSIF, for example under rust/gcd run rust-analyzer lsif . > gcd.lsif.
+Use shell for loop to do this for all Rust examples.
+There is a thing called moniker in LSIF, which marks exports and imports. We will see whether core::option is imported. Try this: `cat div.lsif | grep moniker | grep vertex | grep import`.
+How does one query LSIF to do that? Let's plan this. We'd also get location information from syn nodes?
+We don't have that, so let's put span-locations feature in Cargo.toml.
+Currently, rust2zig takes .rs file as an argument. Let's change that so it takes Cargo package directory as an argument. For now, let's hardcode src/main.rs.
+Updating `for rs in rust/*/src/main.rs` seems better.
+To get "div" of "div.lsif", let's load Cargo.toml using toml crate (use toml::Table) and get package.name key.
+Use `toml = "1"`.
+Use `package`, not `pkg`.
+Let's load LSIF now. Put the code in lsif.rs. Let's use serde_json crate and use serde_json::Value. For now, just load everything to Vec<Value> and maybe print the length as a debugging log.
+Always sort dependencies alphabetically.
+Now let's think about actual data structure we want to build. MonikerIndex struct, with range -> string hashmap?
+Let's make a separate Range struct and keep the full range for the future. Can we start?
+There seem to be code duplications and leave lookup out for now.
+To be correct, it's not 23 monikers, since we counted ranges. Actually count monikers for log.
+No range count.
+Let's have struct Lsif, and that has monikers as field, and lsif::load returns Lsif. Since we will want to build more indexes.
+Now let's add lsif: Lsif field to Rust2Zig.
+Where is lsif coming from? (It probably should be an argument to new.)
+You didn't fix.
+Now, in translate_type in translate/mod.rs, we can get Span from ident. From Span's start and end, let's construct Range (taking into account of 0-based and 1-based numbers) using a utility function and do the lookup.
+Eh, we aren't actually using moniker?
+Let's do the same for Some and None. Some is Expr::Call in expr.rs, and None is Expr::Path. We get Ident for both so it should be similar.
+Why not just ident/range/moniker instead of prefixing with some_?
+Define check_moniker taking syn::Path and String, and use that utility method to reduce duplications.
+println and panic in expr.rs should use check_moniker as well.
+Where is core::panicking::panic_fmt coming from? Check the actual moniker. `cat rust/option/option.lsif | grep println | grep moniker` etc.
+Where else should we use check_moniker?
+How do you think things are going so far?
+Let's stop here for today. Update PLAN.md and memory as needed to reflect the current status.
+Let's just delete that.
+/insights
+/exit

@@ -1,0 +1,48 @@
+/model
+This is a design session. We will design together a software project, provisionally named rust2zig, which is a compiler from Rust to Zig, where high level constructs are idiomatically translated. That is, generated Zig should be suitable for human consumption, not just for compiler.
+Are you familiar with Rust and Zig programming languages?
+I think I will start by generating some example Rust programs covering some fragments of Rust, and then deciding how it should be translated to idiomatic Zig.
+Let's say, Rust program to calculate GCD of 16 and 10 using while loop in gcd function, and main function calls it and prints the result. Let's put it to rust/gcd.rs.
+Let's write a Zig version to zig/gcd.zig.
+Now let's do the same but for for loop. Gauss supposedly summed 1 to 100. Define sum(n), for i in 1..=n, call from main and print, save to rust/sum.rs.
+Before writing a Zig version, how would we translate this?
+That works for iterating over ranges, but that can't be the general way to translate Rust for loop? For Rust "for x in y", y is any iterable, we generally don't know y is range (although we could special case range literal as a quality of implementation issue later).
+I think we should decide on translation of Rust Option first. It probably should be Zig optional, say from Option<u32> to ?u32. Would this cover all cases, or would there be a problem?
+Yes. Let's write an example div.rs, where div does exact division, that is, div(6, 3) is Some(2), but div(7, 3) is None. main calls div and prints the result.
+Rewrite div.rs to use "if let", not "match", since Zig side will be "if with optional". We will deal with general enum and match expression later.
+Write a Zig version to zig/div.zig.
+Let's write an example for enum and match. First enum with no contained value. Direction is one of North, East, South, West. to_string function converts to String. opposite function returns the opposite direction. main calls opposite and prints to_string of result, for each of N/E/S/W. Save to direction.rs.
+Since we haven't decided on for loop yet, avoid for loop and write it out four times, also remove & references.
+Write a Zig version to zig/direction.zig.
+Let's go back to sum.rs and iterator. As I understand, in Rust iterator is a linguistic entity, namely the trait std::iter::Iterator. Since for loop needs to know about it, it even is a language item. My understanding is Zig iterator is a convention and no such corresponding entity exists.
+No. Rust's iterator has a large API surface. I think it is best to just translate the actual implementation. That is, Rust's core::iter::Iterator translates to, say, Zig's rust.core.iter.Iterator, where under rust.* lives translation of Rust core/std stuffs, like Zig's std.*. But then we need to consider how to translate trait and generics. Let's defer this for now.
+What do you think?
+Are you familiar with Zig's comptime generics?
+To rust/option.rs write a minimal version of Rust Option generic, with just is_some() and unwrap().
+Now write a Zig version to zig/option.zig, using comptime generics.
+How do you think things are going so far?
+I actually think error handling is big one. I think references can be just translated to pointers? It would be big problem if we are going from Zig to Rust, but for Rust to Zig since Zig is less restrictive there is just no problem?
+Allocator is a big problem and I am undecided yet whether to have Rust-like global allocator or translating to allocator-passing Zig (sounds challenging at first).
+I think we have enough examples now to sketch the first prototype implementation. We need to make some technical decisions, like how to parse Rust.
+Let's go for Rust with syn, but ultimately we'd want HIR, won't we? For example, we'd want to translate Rust expressions with destructors to Zig defer.
+Do we need to monomorphize? High level translation strategy (generic to comptime) seems to imply we don't. We also don't need to deal with lifetime for this translation.
+Let's dicuss some more. Trait is a big unknown, but it is at least known unknown. Elaborating autoderef etc seems straightforward (not necessarily easy, but straightforward) if we reuse analysis. What big problems do you foresee?
+We'd copy Rust's drop elaborator to stack flags, yes. That seems doable.
+Write out plan to PLAN.md.
+Let's start.
+Why are you adding quote?
+Yes.
+Let's prefix underscore, not suffix. Also, since all uses will be to this mutable version, it should be a = _a, not _a = a, so as not needing to rewrite all a to _a.
+From now on, we'd want to replace zig/gcd.zig with output we just succeeded, and check for byte for byte identity instead of building zig. Do that and write a shell script to run test to test.sh.
+Wouldn't just grepping for PASS and FAIL enough? Why SKIP and numbers? Also use unified diff.
+Isn't "echo -n" better?
+Clean up generated temp file.
+Now do direction.
+This is bad. syn::Path translation should take PathTranslationMode, which can be either Normal or EnumVariant. Callsites pass the right mode, not this "path segment length is 2" nonsense.
+Instead of more hacks, write a pre-translation analysis pass collecting all enums, and detect path starting with enum names to set enum mode, also Zig enum variants are actually snake case I think? So rename to_zig_ident to camel_to_snake.
+Let's put {} -> {s} hack in test.sh. If name is direction, run sed.
+Before moving on, main.rs is now over 400 lines. Let's refactor. Let's rename Context to something like Rust2Zig and make translate_* functions methods of it, and split methods by category, say item, expression, and pattern.
+Now do div.
+How do you think things are going so far?
+Let's stop here for today. Update PLAN.md as needed to reflect the current status.
+/exit
