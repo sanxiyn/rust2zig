@@ -1,0 +1,22 @@
+/effort
+Hi. Where were we? Summarize the current status.
+Let's start by writing some examples. For example, we currently translate enums, but not structs. Write a Rust example, ratio, which defines struct Ratio with fields num and denom, implement add method, and test 1/2 + 1/3 is 5/6.
+Yes, write the expected Zig output.
+Don't we translate self to self: Self, not self: Ratio (or other type names)?
+That doesn't look right. Zig is expected output of mechanical translation. Rust has `fn add(self, other: Ratio) -> Ratio`. Zig should be `fn add(self: Self, other: Ratio) Ratio`, not self: Ratio, other: Ratio, or self: Self, other: Self.
+Now rebuild the index and update expected output under out so that test_test.sh passes.
+Implement struct support.
+Keep the match in translate_expr sorted alphabetically.
+Looking at option.zig and ratio.zig, const Self comes after fields in enum and before fields in struct, which is inconsistent. Make it consistent by putting Self always at top like ratio.zig.
+In ratio example, currently 1/3 + 1/3 would be 6/9, not 2/3. Use gcd to fix this.
+You haven't actually updated ratio main to test 1/3 + 1/3.
+1/3 already exists as b, so use that.
+What next? Looking at variants of syn::Expr, ExprTuple seems promising.
+Yes, write divmod example, but use divmod(7, 3) as an example, also use Zig's recent tuple destructuring support. We are targeting Zig 0.16.0, which is currently the latest release, released 2026-04-14.
+Implement tuple support.
+/config
+How do you think things are going so far?
+Let's stop here for today. Update PLAN.md and memory as needed to reflect the current status.
+Update memory as needed to reflect the current status.
+/insights
+/exit

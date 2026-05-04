@@ -2,10 +2,10 @@ const std = @import("std");
 
 fn Option(comptime T: type) type {
     return union(enum) {
+        const Self = @This();
+
         some: T,
         none,
-
-        const Self = @This();
 
         fn isSome(self: Self) bool {
             return switch (self) {

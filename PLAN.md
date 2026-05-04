@@ -26,14 +26,19 @@ translated. Generated Zig should be suitable for human consumption.
 
 ### Analysis pass
 
-Pre-translation pass (`analyze`) collects metadata from the AST into
-`HashMap<String, Enum>` where `Enum` has:
+Pre-translation pass (`analyze`) collects metadata from the AST into two
+maps: `HashMap<String, Enum>` and `HashMap<String, Struct>`.
+
+`Enum` has:
 * `has_data: bool`: whether any variant has fields
 * `is_generic: bool`: whether the enum has type parameters
 * `impls: Vec<syn::ItemImpl>`: collected impl blocks
 
-The analysis pass runs in two phases: first collects enums, then attaches
-impl blocks to their corresponding enum.
+`Struct` has:
+* `impls: Vec<syn::ItemImpl>`: collected impl blocks
+
+The analysis pass runs in two phases: first collects enum and struct decls,
+then attaches each impl block to its corresponding enum or struct.
 
 ### SCIP integration
 

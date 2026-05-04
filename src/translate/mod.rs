@@ -51,8 +51,13 @@ pub struct Enum {
     pub impls: Vec<syn::ItemImpl>,
 }
 
+pub struct Struct {
+    pub impls: Vec<syn::ItemImpl>,
+}
+
 pub struct Rust2Zig {
     pub enums: HashMap<String, Enum>,
+    pub structs: HashMap<String, Struct>,
     pub scip: Scip,
     out: String,
     indent: usize,
@@ -62,6 +67,7 @@ impl Rust2Zig {
     pub fn new(scip: Scip) -> Self {
         Rust2Zig {
             enums: Default::default(),
+            structs: Default::default(),
             scip,
             out: Default::default(),
             indent: Default::default(),
@@ -97,11 +103,18 @@ impl Rust2Zig {
 
     pub fn analyze(&mut self, file: &syn::File) {
         for item in &file.items {
-            if let syn::Item::Enum(e) = item {
-                let name = e.ident.to_string();
-                let has_data = e.variants.iter().any(|v| !v.fields.is_empty());
-                let is_generic = !e.generics.params.is_empty();
-                self.enums.insert(name, Enum { has_data, is_generic, impls: Default::default() });
+            match item {
+                syn::Item::Enum(e) => {
+                    let name = e.ident.to_string();
+                    let has_data = e.variants.iter().any(|v| !v.fields.is_empty());
+                    let is_generic = !e.generics.params.is_empty();
+                    self.enums.insert(name, Enum { has_data, is_generic, impls: Default::default() });
+                }
+                syn::Item::Struct(s) => {
+                    let name = s.ident.to_string();
+                    self.structs.insert(name, Struct { impls: Default::default() });
+                }
+                _ => {}
             }
         }
 
@@ -111,6 +124,8 @@ impl Rust2Zig {
                     let name = tp.path.segments.last().unwrap().ident.to_string();
                     if let Some(e) = self.enums.get_mut(&name) {
                         e.impls.push(i.clone());
+                    } else if let Some(s) = self.structs.get_mut(&name) {
+                        s.impls.push(i.clone());
                     }
                 }
             }
@@ -187,6 +202,16 @@ impl Rust2Zig {
             }
             syn::Type::Reference(tr) => {
                 self.translate_type(&tr.elem);
+            }
+            syn::Type::Tuple(tt) => {
+                write!(self.out, "struct {{ ").unwrap();
+                for (i, elem) in tt.elems.iter().enumerate() {
+                    if i > 0 {
+                        write!(self.out, ", ").unwrap();
+                    }
+                    self.translate_type(elem);
+                }
+                write!(self.out, " }}").unwrap();
             }
             _ => write!(self.out, "/* TODO: type */").unwrap(),
         }

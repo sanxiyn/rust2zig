@@ -6,6 +6,7 @@ impl Rust2Zig {
     pub fn translate_item(&mut self, item: &syn::Item) {
         match item {
             syn::Item::Enum(e) => self.translate_enum(e),
+            syn::Item::Struct(s) => self.translate_struct(s),
             syn::Item::Fn(f) => self.translate_fn(f),
             syn::Item::Impl(_) => (),
             _ => writeln!(self.out, "// TODO: item").unwrap(),
@@ -48,6 +49,12 @@ impl Rust2Zig {
             }
         }
 
+        if !impls.is_empty() {
+            let pad = self.pad();
+            writeln!(self.out, "{}const Self = @This();", pad).unwrap();
+            writeln!(self.out).unwrap();
+        }
+
         for variant in &e.variants {
             let pad = self.pad();
             let vname = camel_to_snake(&variant.ident.to_string());
@@ -66,18 +73,16 @@ impl Rust2Zig {
             }
         }
 
-        if !impls.is_empty() {
-            writeln!(self.out).unwrap();
-            let pad = self.pad();
-            writeln!(self.out, "{}const Self = @This();", pad).unwrap();
-            for i in &impls {
-                for ii in &i.items {
-                    match ii {
-                        syn::ImplItem::Fn(method) => {
-                            writeln!(self.out).unwrap();
-                            self.translate_method(method);
-                        }
-                        _ => writeln!(self.out, "{}// TODO: impl item", pad).unwrap(),
+        for i in &impls {
+            for ii in &i.items {
+                match ii {
+                    syn::ImplItem::Fn(method) => {
+                        writeln!(self.out).unwrap();
+                        self.translate_method(method);
+                    }
+                    _ => {
+                        let pad = self.pad();
+                        writeln!(self.out, "{}// TODO: impl item", pad).unwrap();
                     }
                 }
             }
@@ -92,6 +97,41 @@ impl Rust2Zig {
             self.dedent();
             writeln!(self.out, "{}}};", self.pad()).unwrap();
         }
+        writeln!(self.out).unwrap();
+    }
+
+    fn translate_struct(&mut self, s: &syn::ItemStruct) {
+        let name = s.ident.to_string();
+        let impls = self.structs[&name].impls.clone();
+
+        writeln!(self.out, "const {} = struct {{", name).unwrap();
+        self.indent();
+
+        if !impls.is_empty() {
+            let pad = self.pad();
+            writeln!(self.out, "{}const Self = @This();", pad).unwrap();
+            writeln!(self.out).unwrap();
+        }
+
+        for field in &s.fields {
+            let pad = self.pad();
+            let fname = field.ident.as_ref().unwrap().to_string();
+            write!(self.out, "{}{}: ", pad, fname).unwrap();
+            self.translate_type(&field.ty);
+            writeln!(self.out, ",").unwrap();
+        }
+
+        for i in &impls {
+            for ii in &i.items {
+                if let syn::ImplItem::Fn(method) = ii {
+                    writeln!(self.out).unwrap();
+                    self.translate_method(method);
+                }
+            }
+        }
+
+        self.dedent();
+        writeln!(self.out, "}};").unwrap();
         writeln!(self.out).unwrap();
     }
 

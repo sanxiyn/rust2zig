@@ -23,6 +23,22 @@ impl Rust2Zig {
                 }
             }
             syn::Stmt::Local(local) => {
+                if let syn::Pat::Tuple(pt) = &local.pat {
+                    write!(self.out, "{}", pad).unwrap();
+                    for (i, elem) in pt.elems.iter().enumerate() {
+                        if i > 0 {
+                            write!(self.out, ", ").unwrap();
+                        }
+                        write!(self.out, "const ").unwrap();
+                        self.translate_pat(elem);
+                    }
+                    if let Some(init) = &local.init {
+                        write!(self.out, " = ").unwrap();
+                        self.translate_expr(&init.expr);
+                    }
+                    writeln!(self.out, ";").unwrap();
+                    return;
+                }
                 let mutability = match &local.pat {
                     syn::Pat::Ident(pi) => pi.mutability.is_some(),
                     syn::Pat::Type(pt) => {
@@ -62,6 +78,7 @@ impl Rust2Zig {
             syn::Expr::Assign(ea) => self.translate_assign(ea),
             syn::Expr::Binary(eb) => self.translate_binary(eb),
             syn::Expr::Call(ec) => self.translate_call(ec),
+            syn::Expr::Field(ef) => self.translate_field(ef),
             syn::Expr::If(ei) => self.translate_if(ei),
             syn::Expr::Lit(el) => self.translate_lit(el),
             syn::Expr::Macro(em) => {
@@ -83,6 +100,8 @@ impl Rust2Zig {
                     }
                 }
             }
+            syn::Expr::Struct(es) => self.translate_struct_expr(es),
+            syn::Expr::Tuple(et) => self.translate_tuple(et),
             syn::Expr::While(ew) => self.translate_while(ew),
             _ => {
                 write!(self.out, "/* TODO: expr */").unwrap();
@@ -149,6 +168,14 @@ impl Rust2Zig {
             self.translate_expr(arg);
         }
         write!(self.out, ")").unwrap();
+    }
+
+    fn translate_field(&mut self, ef: &syn::ExprField) {
+        self.translate_expr(&ef.base);
+        match &ef.member {
+            syn::Member::Named(ident) => write!(self.out, ".{}", ident).unwrap(),
+            syn::Member::Unnamed(idx) => write!(self.out, ".{}", idx.index).unwrap(),
+        }
     }
 
     fn translate_if(&mut self, ei: &syn::ExprIf) {
@@ -232,14 +259,15 @@ impl Rust2Zig {
                 write!(self.out, "std.debug.print(\"{}\\n\", .{{}})", format).unwrap();
             }
         } else {
-            write!(self.out, "std.debug.print(\"{}\\n\", .{{", format).unwrap();
+            let sep = if rest.len() > 1 { " " } else { "" };
+            write!(self.out, "std.debug.print(\"{}\\n\", .{{{}", format, sep).unwrap();
             for (i, arg) in rest.iter().enumerate() {
                 if i > 0 {
                     write!(self.out, ", ").unwrap();
                 }
                 self.translate_expr(arg);
             }
-            write!(self.out, "}})").unwrap();
+            write!(self.out, "{}}})", sep).unwrap();
         }
     }
 
@@ -286,6 +314,33 @@ impl Rust2Zig {
             self.translate_expr(arg);
         }
         write!(self.out, ")").unwrap();
+    }
+
+    fn translate_struct_expr(&mut self, es: &syn::ExprStruct) {
+        self.translate_path(&es.path, PathMode::Normal);
+        write!(self.out, "{{ ").unwrap();
+        for (i, field) in es.fields.iter().enumerate() {
+            if i > 0 {
+                write!(self.out, ", ").unwrap();
+            }
+            match &field.member {
+                syn::Member::Named(ident) => write!(self.out, ".{} = ", ident).unwrap(),
+                syn::Member::Unnamed(idx) => write!(self.out, ".{} = ", idx.index).unwrap(),
+            }
+            self.translate_expr(&field.expr);
+        }
+        write!(self.out, " }}").unwrap();
+    }
+
+    fn translate_tuple(&mut self, et: &syn::ExprTuple) {
+        write!(self.out, ".{{ ").unwrap();
+        for (i, elem) in et.elems.iter().enumerate() {
+            if i > 0 {
+                write!(self.out, ", ").unwrap();
+            }
+            self.translate_expr(elem);
+        }
+        write!(self.out, " }}").unwrap();
     }
 
     fn translate_while(&mut self, ew: &syn::ExprWhile) {
