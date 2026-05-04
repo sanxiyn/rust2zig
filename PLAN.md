@@ -6,19 +6,23 @@ translated. Generated Zig should be suitable for human consumption.
 ## Implementation
 
 * Written in Rust, using `syn` for parsing
-* Use LSIF for semantic information
+* Use SCIP for semantic information
 * Rust generics are translated to Zig comptime
 * Rust references are translated to Zig pointers, lifetimes are erased
 
 ### Code structure
 
 * `src/main.rs`: CLI entry point, takes Cargo package directory as argument
-* `src/lsif.rs`: LSIF loading and indexing (MonikerMap, span->range conversion)
+* `src/scip.rs`: SCIP loading (prost-generated bindings from `proto/scip.proto`),
+  exposes occurrence -> symbol and symbol -> kind maps
+* `src/lsif.rs`: LSIF loader, currently unused (kept for reference)
 * `src/translate/mod.rs`: `Rust2Zig` struct, analysis pass, shared helpers
-  (path, type, block, case conversion, check_moniker)
+  (path, type, block, case conversion, check_moniker, path_mode)
 * `src/translate/expr.rs`: statement and expression translation
 * `src/translate/item.rs`: item translation (enum, fn, method)
 * `src/translate/pat.rs`: pattern translation
+* `build.rs`: compiles `proto/scip.proto` via `prost-build`
+* `build_index.sh`: regenerates `<name>.lsif` and `index.scip` for every example
 
 ### Analysis pass
 
@@ -31,18 +35,18 @@ Pre-translation pass (`analyze`) collects metadata from the AST into
 The analysis pass runs in two phases: first collects enums, then attaches
 impl blocks to their corresponding enum.
 
-### LSIF integration
+### SCIP integration
 
-rust-analyzer LSIF dumps provide semantic information. Used for detecting
-standard library items.
+rust-analyzer SCIP dumps provide semantic information.
 
-* LSIF files: `rust/<name>/<name>.lsif`, generated via `rust-analyzer lsif .`
-* `MonikerMap`: maps `Range` (line/column) to moniker
-* `check_moniker(path, expected)`: resolves a `syn::Path`'s last ident span
-  to an LSIF moniker and compares against expected (handles 0-based/1-based
-  line/column conversion)
-* Currently used for: `core::option::Option`, `core::option::Option::Some`,
-  `core::option::Option::None`, `std::macros::panic`, `std::macros::println`
+* SCIP files: `rust/<name>/index.scip`, generated via `rust-analyzer scip .`
+* `Scip::symbol_at(range)`: resolves a source position to a SCIP symbol string
+* `Scip::kind_at(range)`: resolves to `SymbolInformation.Kind`
+* `check_moniker(path, expected)`: maps logical Rust paths
+  (`core::option::Option::Some`, `std::macros::println`, ...) to SCIP
+  descriptor suffixes and suffix-matches against the occurrence's symbol
+* `path_mode(path)`: returns `EnumVariant` iff the path's last segment
+  resolves to a symbol of kind `EnumMember`
 
 ### Testing
 

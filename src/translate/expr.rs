@@ -215,33 +215,31 @@ impl Rust2Zig {
     }
 
     fn translate_println(&mut self, mac: &syn::Macro) {
-        let tokens = mac.tokens.to_string();
-        if let Some(rest) = tokens.strip_prefix('"') {
-            if let Some(end) = rest.find('"') {
-                let format = &rest[..end];
-                let args_str = rest[end + 1..].trim();
-                let args_str = args_str.strip_prefix(',').unwrap_or("").trim();
-                if args_str.is_empty() {
-                    if format.is_empty() {
-                        write!(self.out, "std.debug.print(\"\\n\", .{{}})").unwrap();
-                    } else {
-                        write!(self.out, "std.debug.print(\"{}\\n\", .{{}})", format).unwrap();
-                    }
-                } else {
-                    let arg_exprs: Vec<syn::Expr> = args_str
-                        .split(',')
-                        .map(|s| syn::parse_str::<syn::Expr>(s.trim()).expect("failed to parse println arg"))
-                        .collect();
-                    write!(self.out, "std.debug.print(\"{}\\n\", .{{", format).unwrap();
-                    for (i, arg) in arg_exprs.iter().enumerate() {
-                        if i > 0 {
-                            write!(self.out, ", ").unwrap();
-                        }
-                        self.translate_expr(arg);
-                    }
-                    write!(self.out, "}})").unwrap();
-                }
+        use syn::parse::Parser;
+        use syn::punctuated::Punctuated;
+        let parser = Punctuated::<syn::Expr, syn::Token![,]>::parse_terminated;
+        let args = parser.parse2(mac.tokens.clone()).expect("failed to parse println args");
+        let mut iter = args.iter();
+        let format = match iter.next() {
+            Some(syn::Expr::Lit(syn::ExprLit { lit: syn::Lit::Str(s), .. })) => s.value(),
+            _ => return,
+        };
+        let rest: Vec<&syn::Expr> = iter.collect();
+        if rest.is_empty() {
+            if format.is_empty() {
+                write!(self.out, "std.debug.print(\"\\n\", .{{}})").unwrap();
+            } else {
+                write!(self.out, "std.debug.print(\"{}\\n\", .{{}})", format).unwrap();
             }
+        } else {
+            write!(self.out, "std.debug.print(\"{}\\n\", .{{", format).unwrap();
+            for (i, arg) in rest.iter().enumerate() {
+                if i > 0 {
+                    write!(self.out, ", ").unwrap();
+                }
+                self.translate_expr(arg);
+            }
+            write!(self.out, "}})").unwrap();
         }
     }
 

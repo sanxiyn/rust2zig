@@ -5,7 +5,7 @@ mod pat;
 use std::collections::HashMap;
 use std::fmt::Write;
 
-use crate::lsif::Lsif;
+use crate::scip::{Kind, Scip};
 
 const INDENT_SIZE: usize = 4;
 
@@ -53,20 +53,34 @@ pub struct Enum {
 
 pub struct Rust2Zig {
     pub enums: HashMap<String, Enum>,
-    pub lsif: Lsif,
+    pub scip: Scip,
     out: String,
     indent: usize,
 }
 
 impl Rust2Zig {
-    pub fn new(lsif: Lsif) -> Self {
-        Rust2Zig { enums: Default::default(), lsif, out: Default::default(), indent: Default::default() }
+    pub fn new(scip: Scip) -> Self {
+        Rust2Zig {
+            enums: Default::default(),
+            scip,
+            out: Default::default(),
+            indent: Default::default(),
+        }
     }
 
     pub fn check_moniker(&self, path: &syn::Path, expected: &str) -> bool {
         let ident = &path.segments.last().unwrap().ident;
         let range = ident.span().into();
-        self.lsif.monikers.get(&range) == Some(expected)
+        let Some(symbol) = self.scip.symbol_at(&range) else { return false };
+        let suffix = match expected {
+            "core::option::Option" => "option/Option#",
+            "core::option::Option::Some" => "option/Option#Some#",
+            "core::option::Option::None" => "option/Option#None#",
+            "std::macros::panic" => "macros/panic!",
+            "std::macros::println" => "macros/println!",
+            _ => return false,
+        };
+        symbol.ends_with(suffix)
     }
 
     fn indent(&mut self) {
@@ -104,13 +118,13 @@ impl Rust2Zig {
     }
 
     pub fn path_mode(&self, path: &syn::Path) -> PathMode {
-        if path.segments.len() > 1 {
-            let first = path.segments[0].ident.to_string();
-            if self.enums.contains_key(&first) {
-                return PathMode::EnumVariant;
-            }
+        let ident = &path.segments.last().unwrap().ident;
+        let range = ident.span().into();
+        if self.scip.kind_at(&range) == Some(Kind::EnumMember) {
+            PathMode::EnumVariant
+        } else {
+            PathMode::Normal
         }
-        PathMode::Normal
     }
 
     pub fn translate_file(&mut self, file: &syn::File) -> String {

@@ -1,0 +1,20 @@
+Explore the project and check whether documentation is correct and up-to-date.
+I want to index "Go to Definition" results from LSIF and use that to replace path_mode. We can translate path as enum variant if it resolves to enum variant. How would we do that?
+Do the proposed verification with jq, but I think rust-analyzer doesn't do tag or SymbolKind.
+Do the verification, but I think rust-analyzer doesn't do local monikers.
+I meant rust-analyzer does not emit monikers with kind: "local", but yes it looks like it doesn't matter. Let's try your proposed implementation plan.
+I think known_variants should be a set of known local variants. Inserting Some and None seems both unnecessary and wrong.
+Can we get type information from LSIF and use that to resolve format specifier issue?
+This seems unfortunate. Doesn't rust-analyzer provide "Go to Type Definition"? Is it just not exposed to LSIF?
+Let's try SCIP.
+Yes, add a SCIP loader. Proposed plan (prost + scip.proto) looks good.
+Why are you searching for scip in Cargo?
+It's scip-code/scip now.
+Interrupted by mistake. Proceed.
+prost 0.14 is out.
+Write build_index.sh that regenerates both LSIF an SCIP for examples.
+Now migrate path_mode and check_moniker to SCIP.
+Keep lsif.rs for now.
+How do you think things are going so far?
+Let's stop here for today. Update PLAN.md and memory as needed to reflect the current status.
+/exit
