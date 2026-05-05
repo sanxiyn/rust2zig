@@ -1,0 +1,16 @@
+Run ./coverage.sh, read the result, and write a report on what cases are not covered to coverage.md.
+Let's work on a new fixture, named coverage. First, let's have multi arguments enum variant and multi arguments method call.
+A great example. For 1, it probably should be something like: .line => |_line| { const a = line[0]; const b = line[1]; ... } to make it mechanical. That is, as in the case of mutable arguments, we want to add `var a = _a; var b = _b;` immediately and keep the rest of translation same, see gcd example. For 2, I think that's okay.
+Rename coverage to geometry, which seems to be a better name.
+We haven't committed, so just mv (not git mv) is enough.
+You do want to update geometry Cargo.toml.
+Re-check the coverage and update coverage.md.
+What are Dot and Line(a, b) Shape supposed to represent?
+Let's make it Dot(Point) and Line(Point, Point).
+Let's add Circle { center: Point, radius: i32 } to geometry in lieu of named_variant.
+Yes, re-check the coverage and update coverage.md.
+Is there a way to exclude prost-generated scip.rs from coverage report?
+Yes, update coverage.md.
+How do you think things are going so far?
+Update PLAN.md and memory as needed to reflect the current status.
+/exit

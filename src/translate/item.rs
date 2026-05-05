@@ -64,11 +64,31 @@ impl Rust2Zig {
                 }
                 syn::Fields::Unnamed(fields) => {
                     write!(self.out, "{}{}: ", pad, vname).unwrap();
-                    self.translate_type(&fields.unnamed[0].ty);
+                    if fields.unnamed.len() == 1 {
+                        self.translate_type(&fields.unnamed[0].ty);
+                    } else {
+                        write!(self.out, "struct {{ ").unwrap();
+                        for (i, field) in fields.unnamed.iter().enumerate() {
+                            if i > 0 {
+                                write!(self.out, ", ").unwrap();
+                            }
+                            self.translate_type(&field.ty);
+                        }
+                        write!(self.out, " }}").unwrap();
+                    }
                     writeln!(self.out, ",").unwrap();
                 }
-                syn::Fields::Named(_) => {
-                    writeln!(self.out, "{}// TODO: named fields", pad).unwrap();
+                syn::Fields::Named(fields) => {
+                    write!(self.out, "{}{}: struct {{ ", pad, vname).unwrap();
+                    for (i, field) in fields.named.iter().enumerate() {
+                        if i > 0 {
+                            write!(self.out, ", ").unwrap();
+                        }
+                        let fname = field.ident.as_ref().unwrap();
+                        write!(self.out, "{}: ", fname).unwrap();
+                        self.translate_type(&field.ty);
+                    }
+                    writeln!(self.out, " }},").unwrap();
                 }
             }
         }

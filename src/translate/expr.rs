@@ -93,11 +93,18 @@ impl Rust2Zig {
                 let name = ep.path.segments.last().unwrap().ident.to_string();
                 let variant = camel_to_snake(&name);
                 write!(self.out, ".{{ .{} = ", variant).unwrap();
+                let multi = ec.args.len() > 1;
+                if multi {
+                    write!(self.out, ".{{ ").unwrap();
+                }
                 for (i, arg) in ec.args.iter().enumerate() {
                     if i > 0 {
                         write!(self.out, ", ").unwrap();
                     }
                     self.translate_expr(arg);
+                }
+                if multi {
+                    write!(self.out, " }}").unwrap();
                 }
                 write!(self.out, " }}").unwrap();
                 return;
@@ -254,19 +261,39 @@ impl Rust2Zig {
         for arm in arms {
             let pad = self.pad();
             write!(self.out, "{}", pad).unwrap();
+            let variant = match &arm.pat {
+                syn::Pat::TupleStruct(pts) => {
+                    Some(camel_to_snake(&pts.path.segments.last().unwrap().ident.to_string()))
+                }
+                syn::Pat::Struct(ps) => {
+                    Some(camel_to_snake(&ps.path.segments.last().unwrap().ident.to_string()))
+                }
+                _ => None,
+            };
             let captures = self.translate_match_pat(&arm.pat);
             write!(self.out, " => ").unwrap();
-            if !captures.is_empty() {
-                write!(self.out, "|").unwrap();
-                for (i, cap) in captures.iter().enumerate() {
-                    if i > 0 {
-                        write!(self.out, ", ").unwrap();
-                    }
-                    write!(self.out, "{}", cap).unwrap();
+            let use_block = captures.len() > 1
+                || captures.iter().any(|(_, acc)| acc.starts_with('.'));
+            if use_block {
+                let payload = format!("_{}", variant.unwrap());
+                writeln!(self.out, "|{}| {{", payload).unwrap();
+                self.indent();
+                for (capture, accessor) in &captures {
+                    let pad = self.pad();
+                    writeln!(self.out, "{}const {} = {}{};", pad, capture, payload, accessor).unwrap();
                 }
-                write!(self.out, "| ").unwrap();
+                let pad = self.pad();
+                write!(self.out, "{}", pad).unwrap();
+                self.translate_expr(&arm.body);
+                writeln!(self.out, ";").unwrap();
+                self.dedent();
+                write!(self.out, "{}}}", self.pad()).unwrap();
+            } else {
+                if let Some((capture, _)) = captures.first() {
+                    write!(self.out, "|{}| ", capture).unwrap();
+                }
+                self.translate_expr(&arm.body);
             }
-            self.translate_expr(&arm.body);
             writeln!(self.out, ",").unwrap();
         }
         self.dedent();
@@ -287,6 +314,21 @@ impl Rust2Zig {
     }
 
     fn translate_struct_expr(&mut self, es: &syn::ExprStruct) {
+        if matches!(self.path_mode(&es.path), PathMode::EnumVariant) {
+            let variant = camel_to_snake(&es.path.segments.last().unwrap().ident.to_string());
+            write!(self.out, ".{{ .{} = .{{ ", variant).unwrap();
+            for (i, field) in es.fields.iter().enumerate() {
+                if i > 0 {
+                    write!(self.out, ", ").unwrap();
+                }
+                if let syn::Member::Named(ident) = &field.member {
+                    write!(self.out, ".{} = ", ident).unwrap();
+                }
+                self.translate_expr(&field.expr);
+            }
+            write!(self.out, " }} }}").unwrap();
+            return;
+        }
         self.translate_path(&es.path, PathMode::Normal);
         write!(self.out, "{{ ").unwrap();
         for (i, field) in es.fields.iter().enumerate() {

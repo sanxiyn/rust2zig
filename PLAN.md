@@ -25,6 +25,9 @@ translated. Generated Zig should be suitable for human consumption.
 * `src/translate/ty.rs`: type translation
 * `build.rs`: compiles `proto/scip.proto` via `prost-build`
 * `build_index.sh`: regenerates `<name>.lsif` and `index.scip` for every example
+* `coverage.sh`: runs `test.sh` under `cargo-llvm-cov`, excluding the
+  prost-generated `target/.../out/scip.rs` from the report. Output goes to
+  `coverage/text/`; current findings are summarized in `coverage.md`.
 
 ### Analysis pass
 
@@ -69,7 +72,7 @@ examples and compares output against expected output under `out`. This ensures
 input/output pairs used to test the translator is in fact equivalent.
 
 Examples currently passing both suites: gcd, direction, div, option, result,
-ratio (struct), divmod (tuple), sum (array).
+ratio (struct), divmod (tuple), sum (array), geometry.
 
 ## Bugs
 
