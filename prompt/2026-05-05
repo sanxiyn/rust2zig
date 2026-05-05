@@ -1,0 +1,18 @@
+Explore the project and check whether documentation is correct and up-to-date.
+Let's start by refactoring a bit. Split statement and type related methods to stmt.rs and ty.rs, like we did for expr/item/pat.
+Yes, update PLAN.md.
+Looking at variants of syn::Expr, ExprArray seems to be a good candidate to handle next. Let's start by writing a example, sum, summing [1, 2, 3, 4, 5] to 15.
+Before that, we should write the expected Zig output first.
+For now, let's rewrite Rust example to annotate types. Also use u32. That is, xs: [u32; _], total: u32, etc.
+Yes, update the index.
+Implement array support.
+Please keep match arms alphabetically sorted.
+I allowed permission to run ./test.sh, so do that instead of bash test.sh.
+Let's implement for loop for array too. In this case, lookup xs in `for x in xs` for SCIP symbol information, and pull type from signature_documentation. If it is array, use Zig for loop for array.
+protoc is installed, so use that. For example, protoc -I proto --decode scip.Index scip.proto < rust/sum/index.scip, etc.
+.contains('[') is too hacky. At least make it a method, and if symbol kind is Variable, you can look for first `: ` and parse the rest as syn::Type.
+Implement compound assign ops: +=, -=, *=, /=, and %=.
+How do you think things are going so far?
+Update PLAN.md and memory as needed to reflect the current status.
+/insights
+/exit

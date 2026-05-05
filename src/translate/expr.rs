@@ -3,82 +3,14 @@ use std::fmt::Write;
 use super::{PathMode, Rust2Zig, camel_to_snake, snake_to_camel};
 
 impl Rust2Zig {
-    pub fn translate_stmt(&mut self, stmt: &syn::Stmt, is_last: bool) {
-        let pad = self.pad();
-        match stmt {
-            syn::Stmt::Expr(expr, semi) => {
-                let no_trailing_semi = matches!(expr, syn::Expr::If(_) | syn::Expr::While(_));
-                if is_last && semi.is_none() && !matches!(expr, syn::Expr::If(_)) {
-                    write!(self.out, "{}return ", pad).unwrap();
-                    self.translate_expr(expr);
-                    writeln!(self.out, ";").unwrap();
-                } else if no_trailing_semi {
-                    write!(self.out, "{}", pad).unwrap();
-                    self.translate_expr(expr);
-                    writeln!(self.out).unwrap();
-                } else {
-                    write!(self.out, "{}", pad).unwrap();
-                    self.translate_expr(expr);
-                    writeln!(self.out, ";").unwrap();
-                }
-            }
-            syn::Stmt::Local(local) => {
-                if let syn::Pat::Tuple(pt) = &local.pat {
-                    write!(self.out, "{}", pad).unwrap();
-                    for (i, elem) in pt.elems.iter().enumerate() {
-                        if i > 0 {
-                            write!(self.out, ", ").unwrap();
-                        }
-                        write!(self.out, "const ").unwrap();
-                        self.translate_pat(elem);
-                    }
-                    if let Some(init) = &local.init {
-                        write!(self.out, " = ").unwrap();
-                        self.translate_expr(&init.expr);
-                    }
-                    writeln!(self.out, ";").unwrap();
-                    return;
-                }
-                let mutability = match &local.pat {
-                    syn::Pat::Ident(pi) => pi.mutability.is_some(),
-                    syn::Pat::Type(pt) => {
-                        if let syn::Pat::Ident(pi) = &*pt.pat {
-                            pi.mutability.is_some()
-                        } else {
-                            false
-                        }
-                    }
-                    _ => false,
-                };
-                let keyword = if mutability { "var" } else { "const" };
-                write!(self.out, "{}{} ", pad, keyword).unwrap();
-                self.translate_pat(&local.pat);
-                if let Some(init) = &local.init {
-                    write!(self.out, " = ").unwrap();
-                    self.translate_expr(&init.expr);
-                }
-                writeln!(self.out, ";").unwrap();
-            }
-            syn::Stmt::Macro(sm) => {
-                write!(self.out, "{}", pad).unwrap();
-                if self.translate_macro(&sm.mac) {
-                    writeln!(self.out, ";").unwrap();
-                } else {
-                    writeln!(self.out, "// TODO: macro").unwrap();
-                }
-            }
-            _ => {
-                writeln!(self.out, "{}// TODO: stmt", pad).unwrap();
-            }
-        }
-    }
-
     pub fn translate_expr(&mut self, expr: &syn::Expr) {
         match expr {
+            syn::Expr::Array(ea) => self.translate_array(ea),
             syn::Expr::Assign(ea) => self.translate_assign(ea),
             syn::Expr::Binary(eb) => self.translate_binary(eb),
             syn::Expr::Call(ec) => self.translate_call(ec),
             syn::Expr::Field(ef) => self.translate_field(ef),
+            syn::Expr::ForLoop(efl) => self.translate_for_loop(efl),
             syn::Expr::If(ei) => self.translate_if(ei),
             syn::Expr::Lit(el) => self.translate_lit(el),
             syn::Expr::Macro(em) => {
@@ -109,6 +41,17 @@ impl Rust2Zig {
         }
     }
 
+    fn translate_array(&mut self, ea: &syn::ExprArray) {
+        write!(self.out, ".{{ ").unwrap();
+        for (i, elem) in ea.elems.iter().enumerate() {
+            if i > 0 {
+                write!(self.out, ", ").unwrap();
+            }
+            self.translate_expr(elem);
+        }
+        write!(self.out, " }}").unwrap();
+    }
+
     fn translate_assign(&mut self, ea: &syn::ExprAssign) {
         self.translate_expr(&ea.left);
         write!(self.out, " = ").unwrap();
@@ -125,16 +68,21 @@ impl Rust2Zig {
     fn translate_binop(&mut self, op: &syn::BinOp) -> &'static str {
         match op {
             syn::BinOp::Add(_) => "+",
-            syn::BinOp::Sub(_) => "-",
-            syn::BinOp::Mul(_) => "*",
+            syn::BinOp::AddAssign(_) => "+=",
             syn::BinOp::Div(_) => "/",
-            syn::BinOp::Rem(_) => "%",
+            syn::BinOp::DivAssign(_) => "/=",
             syn::BinOp::Eq(_) => "==",
-            syn::BinOp::Ne(_) => "!=",
-            syn::BinOp::Lt(_) => "<",
-            syn::BinOp::Le(_) => "<=",
-            syn::BinOp::Gt(_) => ">",
             syn::BinOp::Ge(_) => ">=",
+            syn::BinOp::Gt(_) => ">",
+            syn::BinOp::Le(_) => "<=",
+            syn::BinOp::Lt(_) => "<",
+            syn::BinOp::Mul(_) => "*",
+            syn::BinOp::MulAssign(_) => "*=",
+            syn::BinOp::Ne(_) => "!=",
+            syn::BinOp::Rem(_) => "%",
+            syn::BinOp::RemAssign(_) => "%=",
+            syn::BinOp::Sub(_) => "-",
+            syn::BinOp::SubAssign(_) => "-=",
             _ => "/* TODO: binop */",
         }
     }
@@ -178,6 +126,28 @@ impl Rust2Zig {
         }
     }
 
+    fn translate_for_loop(&mut self, efl: &syn::ExprForLoop) {
+        let is_array = if let syn::Expr::Path(ep) = &*efl.expr {
+            let ident = &ep.path.segments.last().unwrap().ident;
+            matches!(
+                self.scip.type_at(&ident.span().into()),
+                Some(syn::Type::Array(_))
+            )
+        } else {
+            false
+        };
+        if !is_array {
+            write!(self.out, "/* TODO: for */").unwrap();
+            return;
+        }
+        write!(self.out, "for (").unwrap();
+        self.translate_expr(&efl.expr);
+        write!(self.out, ") |").unwrap();
+        self.translate_pat(&efl.pat);
+        write!(self.out, "| ").unwrap();
+        self.translate_block(&efl.body);
+    }
+
     fn translate_if(&mut self, ei: &syn::ExprIf) {
         if let syn::Expr::Let(el) = &*ei.cond {
             if let syn::Pat::TupleStruct(pts) = &*el.pat {
@@ -219,7 +189,7 @@ impl Rust2Zig {
         }
     }
 
-    fn translate_macro(&mut self, mac: &syn::Macro) -> bool {
+    pub fn translate_macro(&mut self, mac: &syn::Macro) -> bool {
         if self.check_moniker(&mac.path, "std::macros::panic") {
             self.translate_panic(mac);
             true

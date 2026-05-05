@@ -35,6 +35,7 @@ impl From<Span> for Range {
 
 pub struct SymbolInfo {
     pub kind: Kind,
+    pub signature: Option<String>,
 }
 
 pub struct Scip {
@@ -54,6 +55,17 @@ impl Scip {
     pub fn kind_at(&self, range: &Range) -> Option<Kind> {
         let symbol = self.symbol_at(range)?;
         Some(self.symbol_info(symbol)?.kind)
+    }
+
+    pub fn type_at(&self, range: &Range) -> Option<syn::Type> {
+        let symbol = self.symbol_at(range)?;
+        let info = self.symbol_info(symbol)?;
+        if info.kind != Kind::Variable {
+            return None;
+        }
+        let sig = info.signature.as_deref()?;
+        let (_, ty) = sig.split_once(": ")?;
+        syn::parse_str(ty).ok()
     }
 }
 
@@ -87,9 +99,13 @@ pub fn load(package_dir: &Path) -> Scip {
             }
         }
         for symbol in &document.symbols {
+            let signature = symbol
+                .signature_documentation
+                .as_ref()
+                .map(|d| d.text.clone());
             symbols.insert(
                 symbol.symbol.clone(),
-                SymbolInfo { kind: symbol.kind() },
+                SymbolInfo { kind: symbol.kind(), signature },
             );
         }
     }
