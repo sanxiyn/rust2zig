@@ -174,7 +174,7 @@ impl Rust2Zig {
         self.translate_expr(&ef.base);
         match &ef.member {
             syn::Member::Named(ident) => write!(self.out, ".{}", ident).unwrap(),
-            syn::Member::Unnamed(idx) => write!(self.out, ".{}", idx.index).unwrap(),
+            syn::Member::Unnamed(index) => write!(self.out, ".{}", index.index).unwrap(),
         }
     }
 
@@ -325,7 +325,7 @@ impl Rust2Zig {
             }
             match &field.member {
                 syn::Member::Named(ident) => write!(self.out, ".{} = ", ident).unwrap(),
-                syn::Member::Unnamed(idx) => write!(self.out, ".{} = ", idx.index).unwrap(),
+                syn::Member::Unnamed(index) => write!(self.out, ".{} = ", index.index).unwrap(),
             }
             self.translate_expr(&field.expr);
         }
