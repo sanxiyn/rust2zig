@@ -20,6 +20,7 @@ translated. Generated Zig should be suitable for human consumption.
   (path, case conversion, check_moniker, path_mode)
 * `src/translate/expr.rs`: expression translation
 * `src/translate/item.rs`: item translation (enum, struct, method, fn)
+* `src/translate/mac.rs`: macro translation (`panic!`, `println!`)
 * `src/translate/pat.rs`: pattern translation
 * `src/translate/stmt.rs`: statement and block translation
 * `src/translate/ty.rs`: type translation
@@ -55,6 +56,9 @@ rust-analyzer SCIP dumps provide semantic information.
 * `Scip::type_at(range)`: for `Kind::Variable` and `Kind::Parameter`
   symbols, parses the suffix after `: ` in `signature_documentation.text`
   (e.g. `let xs: [i32; 5]`, `xs: &[i32]`) as `syn::Type`
+* `SymbolInfo::range`: the definition occurrence's range (set from the
+  occurrence carrying `SymbolRole::Definition`). Used by `has_capture`
+  to tell outer locals from closure-introduced bindings.
 * `check_moniker(path, expected)`: maps logical Rust paths
   (`core::option::Option::Some`, `std::macros::println`, ...) to SCIP
   descriptor suffixes and suffix-matches against the occurrence's symbol
@@ -72,7 +76,7 @@ examples and compares output against expected output under `out`. This ensures
 input/output pairs used to test the translator is in fact equivalent.
 
 Examples currently passing both suites: gcd, direction, div, option, result,
-ratio (struct), divmod (tuple), sum (for loop), geometry.
+ratio (struct), divmod (tuple), sum (for loop), geometry, closure.
 
 ## Notes
 
@@ -87,6 +91,13 @@ ratio (struct), divmod (tuple), sum (for loop), geometry.
 * Block emission goes through `translate_block_with_preamble`, which
   takes pre-built lines inserted before the body — used by mutable-arg
   shadowing (`var a = _a;`) and range-loop intCast.
+* Non-capturing closures (`let f = |x| x * 2;`) translate to a local
+  struct-wrapped fn: `const f = struct { fn call(x: T) R { ... } }.call;`.
+  Param types come from `Scip::type_at` on each param ident; the return
+  type is parsed out of the binding's `impl Fn(..) -> R` signature via
+  `closure_return_type`. `has_capture` (a `syn::visit` walk that compares
+  each ident's SCIP definition range against the closure span) gates the
+  translation — capturing closures fall back to a TODO.
 
 ## Bugs
 
@@ -99,3 +110,8 @@ ratio (struct), divmod (tuple), sum (for loop), geometry.
   strings. Currently hacked with sed, see `test.sh`.
 * For loops over iterators (other than ranges and `&[T]` slices) are
   TODO.
+* Closure param shadowing: a closure param with the same name as an
+  outer local (e.g. `let x = 3; let f = |x| x * 2;`) compiles in Rust
+  but the emitted Zig fails with "function parameter 'x' shadows local
+  constant from outer scope", since Zig doesn't allow shadowing across
+  the struct-wrapped fn boundary. Needs a renaming strategy.

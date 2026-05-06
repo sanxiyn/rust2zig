@@ -1,0 +1,18 @@
+First, read README.md.
+Let's start by refactoring a bit. Split macro related code to mac.rs, like we did for expr/item/pat/stmt/ty.
+Zig doesn't have closures, does it?
+Rust got closures, but often they don't capture any variables at all, like |x| x * 2. That can be translated to Zig function pointers, I think. How would we analyze whether closures capture variables?
+Let's add range: Range to SymbolInfo in scip.rs. We check for SymbolRole::Definition, I think?
+SymbolRole comes before symbol_information.
+Let's add has_capture taking syn::ExprClosure and returning bool.
+Let's write a small example first. Name it closure. In main, x = 3, double = |x| x * 2, print double(x), etc.
+Let's write the Zig version.
+Did you write the Zig version?
+Make it local.
+Let's change Rust version to let i = 3; instead of let x = 3;.
+Now implement closure support.
+Read prompt/2026-05-05 to see how to run protoc to read protobuf. After that, put it on your memory.
+Update README to reflect the current status. In particular, note shadowing problem in Bugs section.
+How do you think things are going so far?
+/insights
+/exit

@@ -54,6 +54,12 @@ impl Rust2Zig {
                     _ => None,
                 };
                 if let Some(pi) = binding {
+                    if let Some(init) = &local.init {
+                        if let syn::Expr::Closure(ec) = &*init.expr {
+                            self.translate_closure_local(pi, ec);
+                            return;
+                        }
+                    }
                     let keyword = if pi.mutability.is_some() { "var" } else { "const" };
                     write!(self.out, "{}{} {}", pad, keyword, pi.ident).unwrap();
                     if let Some(ty) = self.scip.type_at(&pi.ident.span().into()) {
@@ -87,6 +93,57 @@ impl Rust2Zig {
                 writeln!(self.out, "{}// TODO: stmt", pad).unwrap();
             }
         }
+    }
+
+    fn translate_closure_local(&mut self, pi: &syn::PatIdent, ec: &syn::ExprClosure) {
+        let pad = self.pad();
+        if self.has_capture(ec) {
+            writeln!(
+                self.out,
+                "{}const {} = /* TODO: closure */;",
+                pad, pi.ident
+            )
+            .unwrap();
+            return;
+        }
+        writeln!(self.out, "{}const {} = struct {{", pad, pi.ident).unwrap();
+        self.indent();
+        write!(self.out, "{}fn call(", self.pad()).unwrap();
+        for (i, input) in ec.inputs.iter().enumerate() {
+            if i > 0 {
+                write!(self.out, ", ").unwrap();
+            }
+            if let syn::Pat::Ident(pi) = input {
+                write!(self.out, "{}", pi.ident).unwrap();
+                if let Some(ty) = self.scip.type_at(&pi.ident.span().into()) {
+                    write!(self.out, ": ").unwrap();
+                    self.translate_type(&ty);
+                }
+            } else {
+                self.translate_pat(input);
+            }
+        }
+        write!(self.out, ") ").unwrap();
+        if let Some(ret) = self.closure_return_type(&pi.ident) {
+            self.translate_type(&ret);
+        } else {
+            write!(self.out, "void").unwrap();
+        }
+        write!(self.out, " ").unwrap();
+        if let syn::Expr::Block(eb) = &*ec.body {
+            self.translate_block(&eb.block);
+            writeln!(self.out).unwrap();
+        } else {
+            writeln!(self.out, "{{").unwrap();
+            self.indent();
+            write!(self.out, "{}return ", self.pad()).unwrap();
+            self.translate_expr(&ec.body);
+            writeln!(self.out, ";").unwrap();
+            self.dedent();
+            writeln!(self.out, "{}}}", self.pad()).unwrap();
+        }
+        self.dedent();
+        writeln!(self.out, "{}}}.call;", pad).unwrap();
     }
 
     pub fn translate_block(&mut self, block: &syn::Block) {

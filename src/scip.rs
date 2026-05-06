@@ -10,6 +10,7 @@ mod proto {
     include!(concat!(env!("OUT_DIR"), "/scip.rs"));
 }
 
+pub use proto::SymbolRole;
 pub use proto::symbol_information::Kind;
 
 #[derive(Clone, Eq, Hash, PartialEq)]
@@ -18,6 +19,16 @@ pub struct Range {
     pub start_character: u32,
     pub end_line: u32,
     pub end_character: u32,
+}
+
+impl Range {
+    pub fn contains(&self, other: &Range) -> bool {
+        let outer_start = (self.start_line, self.start_character);
+        let outer_end = (self.end_line, self.end_character);
+        let inner_start = (other.start_line, other.start_character);
+        let inner_end = (other.end_line, other.end_character);
+        outer_start <= inner_start && inner_end <= outer_end
+    }
 }
 
 impl From<Span> for Range {
@@ -35,6 +46,7 @@ impl From<Span> for Range {
 
 pub struct SymbolInfo {
     pub kind: Kind,
+    pub range: Option<Range>,
     pub signature: Option<String>,
 }
 
@@ -89,23 +101,29 @@ pub fn load(package_dir: &Path) -> Scip {
     let index = proto::Index::decode(bytes.as_slice()).expect("failed to decode SCIP");
 
     let mut occurrences: HashMap<Range, String> = Default::default();
+    let mut definitions: HashMap<String, Range> = Default::default();
     let mut symbols: HashMap<String, SymbolInfo> = Default::default();
 
     for document in &index.documents {
         for occurrence in &document.occurrences {
             let Some(range) = decode_range(&occurrence.range) else { continue };
-            if !occurrence.symbol.is_empty() {
-                occurrences.insert(range, occurrence.symbol.clone());
+            if occurrence.symbol.is_empty() {
+                continue;
             }
+            if occurrence.symbol_roles & SymbolRole::Definition as i32 != 0 {
+                definitions.insert(occurrence.symbol.clone(), range.clone());
+            }
+            occurrences.insert(range, occurrence.symbol.clone());
         }
         for symbol in &document.symbols {
+            let range = definitions.get(&symbol.symbol).cloned();
             let signature = symbol
                 .signature_documentation
                 .as_ref()
                 .map(|d| d.text.clone());
             symbols.insert(
                 symbol.symbol.clone(),
-                SymbolInfo { kind: symbol.kind(), signature },
+                SymbolInfo { kind: symbol.kind(), range, signature },
             );
         }
     }

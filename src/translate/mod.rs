@@ -1,5 +1,6 @@
 mod expr;
 mod item;
+mod mac;
 mod pat;
 mod stmt;
 mod ty;
@@ -7,7 +8,7 @@ mod ty;
 use std::collections::HashMap;
 use std::fmt::Write;
 
-use crate::scip::{Kind, Scip};
+use crate::scip::{Kind, Range, Scip};
 
 const INDENT_SIZE: usize = 4;
 
@@ -132,6 +133,54 @@ impl Rust2Zig {
                 }
             }
         }
+    }
+
+    pub fn has_capture(&self, ec: &syn::ExprClosure) -> bool {
+        use syn::spanned::Spanned;
+        use syn::visit::Visit;
+
+        struct Visitor<'a> {
+            scip: &'a Scip,
+            span: Range,
+            found: bool,
+        }
+
+        impl<'a, 'ast> Visit<'ast> for Visitor<'a> {
+            fn visit_ident(&mut self, ident: &'ast syn::Ident) {
+                if self.found {
+                    return;
+                }
+                let range: Range = ident.span().into();
+                let Some(symbol) = self.scip.symbol_at(&range) else { return };
+                let Some(info) = self.scip.symbol_info(symbol) else { return };
+                if !matches!(info.kind, Kind::Variable | Kind::Parameter) {
+                    return;
+                }
+                let Some(def) = info.range.as_ref() else { return };
+                if !self.span.contains(def) {
+                    self.found = true;
+                }
+            }
+        }
+
+        let span: Range = ec.span().into();
+        let mut visitor = Visitor { scip: &self.scip, span, found: false };
+        visitor.visit_expr(&ec.body);
+        visitor.found
+    }
+
+    pub fn closure_return_type(&self, ident: &syn::Ident) -> Option<syn::Type> {
+        let ty = self.scip.type_at(&ident.span().into())?;
+        let syn::Type::ImplTrait(it) = ty else { return None };
+        for bound in it.bounds {
+            let syn::TypeParamBound::Trait(tb) = bound else { continue };
+            let Some(last) = tb.path.segments.last() else { continue };
+            let syn::PathArguments::Parenthesized(p) = &last.arguments else { continue };
+            if let syn::ReturnType::Type(_, t) = &p.output {
+                return Some((**t).clone());
+            }
+        }
+        None
     }
 
     pub fn path_mode(&self, path: &syn::Path) -> PathMode {
