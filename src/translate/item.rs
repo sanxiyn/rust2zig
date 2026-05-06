@@ -214,7 +214,11 @@ impl Rust2Zig {
         }
 
         write!(self.out, " ").unwrap();
-        self.translate_block_with_mut_params(&f.block, &mut_params);
+        let preamble: Vec<String> = mut_params
+            .iter()
+            .map(|name| format!("var {name} = _{name};"))
+            .collect();
+        self.translate_block_with_preamble(&f.block, &preamble);
         writeln!(self.out).unwrap();
         writeln!(self.out).unwrap();
     }

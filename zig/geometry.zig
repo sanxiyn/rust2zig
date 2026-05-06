@@ -34,8 +34,8 @@ fn describe(s: Shape) void {
 }
 
 pub fn main() void {
-    const p = Point{ .x = 1, .y = 2 };
-    const q = p.translate(3, 4);
+    const p: Point = Point{ .x = 1, .y = 2 };
+    const q: Point = p.translate(3, 4);
     std.debug.print("{} {}\n", .{ q.x, q.y });
     describe(.{ .dot = p });
     describe(.{ .line = .{ p, q } });

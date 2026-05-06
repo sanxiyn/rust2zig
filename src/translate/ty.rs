@@ -50,7 +50,16 @@ impl Rust2Zig {
                 }
             }
             syn::Type::Reference(tr) => {
-                self.translate_type(&tr.elem);
+                if let syn::Type::Slice(ts) = &*tr.elem {
+                    write!(self.out, "[]const ").unwrap();
+                    self.translate_type(&ts.elem);
+                } else {
+                    self.translate_type(&tr.elem);
+                }
+            }
+            syn::Type::Slice(ts) => {
+                write!(self.out, "[]").unwrap();
+                self.translate_type(&ts.elem);
             }
             syn::Type::Tuple(tt) => {
                 write!(self.out, "struct {{ ").unwrap();

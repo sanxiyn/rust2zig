@@ -52,9 +52,9 @@ rust-analyzer SCIP dumps provide semantic information.
 * SCIP files: `rust/<name>/index.scip`, generated via `rust-analyzer scip .`
 * `Scip::symbol_at(range)`: resolves a source position to a SCIP symbol string
 * `Scip::kind_at(range)`: resolves to `SymbolInformation.Kind`
-* `Scip::type_at(range)`: for `Kind::Variable` symbols, parses the suffix
-  after `: ` in `signature_documentation.text` (e.g. `let xs: [u32; 5]`)
-  as `syn::Type`
+* `Scip::type_at(range)`: for `Kind::Variable` and `Kind::Parameter`
+  symbols, parses the suffix after `: ` in `signature_documentation.text`
+  (e.g. `let xs: [i32; 5]`, `xs: &[i32]`) as `syn::Type`
 * `check_moniker(path, expected)`: maps logical Rust paths
   (`core::option::Option::Some`, `std::macros::println`, ...) to SCIP
   descriptor suffixes and suffix-matches against the occurrence's symbol
@@ -72,7 +72,21 @@ examples and compares output against expected output under `out`. This ensures
 input/output pairs used to test the translator is in fact equivalent.
 
 Examples currently passing both suites: gcd, direction, div, option, result,
-ratio (struct), divmod (tuple), sum (array), geometry.
+ratio (struct), divmod (tuple), sum (for loop), geometry.
+
+## Notes
+
+* `let` bindings always emit a Zig type annotation resolved via
+  `Scip::type_at` on the binding ident, ignoring any source-level
+  Rust annotation (which may contain wildcards like `[T; _]`).
+* For loops translate when the iterable is an array, an `&[T]` slice
+  (treated identically — Zig captures the element directly), or a
+  range. Closed Rust ranges (`a..=b`) become `a..(b+1)` in Zig; the
+  capture is `usize`, so the body is wrapped with a preamble
+  `const x: T = @intCast(_x);` using `Scip::type_at` on the loop var.
+* Block emission goes through `translate_block_with_preamble`, which
+  takes pre-built lines inserted before the body — used by mutable-arg
+  shadowing (`var a = _a;`) and range-loop intCast.
 
 ## Bugs
 
@@ -83,5 +97,5 @@ ratio (struct), divmod (tuple), sum (array), geometry.
 * Format specifiers: Without type info, `println!("{}", x)` translates
   to `std.debug.print("{}\n", .{x})`. This works for integers but not for
   strings. Currently hacked with sed, see `test.sh`.
-* For loops only translate when the iterable resolves to an array via
-  `Scip::type_at`. Ranges, slices, and iterators are all TODO.
+* For loops over iterators (other than ranges and `&[T]` slices) are
+  TODO.

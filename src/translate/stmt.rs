@@ -42,38 +42,38 @@ impl Rust2Zig {
                     writeln!(self.out, ";").unwrap();
                     return;
                 }
-                let mutability = match &local.pat {
-                    syn::Pat::Ident(pi) => pi.mutability.is_some(),
+                let binding = match &local.pat {
+                    syn::Pat::Ident(pi) => Some(pi),
                     syn::Pat::Type(pt) => {
                         if let syn::Pat::Ident(pi) = &*pt.pat {
-                            pi.mutability.is_some()
+                            Some(pi)
                         } else {
-                            false
+                            None
                         }
                     }
-                    _ => false,
+                    _ => None,
                 };
-                let keyword = if mutability { "var" } else { "const" };
-                write!(self.out, "{}{} ", pad, keyword).unwrap();
-                if let (syn::Pat::Type(pt), Some(init)) = (&local.pat, &local.init) {
-                    if let (syn::Type::Array(ta), syn::Expr::Array(ea)) = (&*pt.ty, &*init.expr) {
-                        if matches!(ta.len, syn::Expr::Infer(_)) {
-                            self.translate_pat(&pt.pat);
-                            write!(self.out, ": [{}]", ea.elems.len()).unwrap();
-                            self.translate_type(&ta.elem);
-                            write!(self.out, " = ").unwrap();
-                            self.translate_expr(&init.expr);
-                            writeln!(self.out, ";").unwrap();
-                            return;
-                        }
+                if let Some(pi) = binding {
+                    let keyword = if pi.mutability.is_some() { "var" } else { "const" };
+                    write!(self.out, "{}{} {}", pad, keyword, pi.ident).unwrap();
+                    if let Some(ty) = self.scip.type_at(&pi.ident.span().into()) {
+                        write!(self.out, ": ").unwrap();
+                        self.translate_type(&ty);
                     }
+                    if let Some(init) = &local.init {
+                        write!(self.out, " = ").unwrap();
+                        self.translate_expr(&init.expr);
+                    }
+                    writeln!(self.out, ";").unwrap();
+                } else {
+                    write!(self.out, "{}const ", pad).unwrap();
+                    self.translate_pat(&local.pat);
+                    if let Some(init) = &local.init {
+                        write!(self.out, " = ").unwrap();
+                        self.translate_expr(&init.expr);
+                    }
+                    writeln!(self.out, ";").unwrap();
                 }
-                self.translate_pat(&local.pat);
-                if let Some(init) = &local.init {
-                    write!(self.out, " = ").unwrap();
-                    self.translate_expr(&init.expr);
-                }
-                writeln!(self.out, ";").unwrap();
             }
             syn::Stmt::Macro(sm) => {
                 write!(self.out, "{}", pad).unwrap();
@@ -90,15 +90,15 @@ impl Rust2Zig {
     }
 
     pub fn translate_block(&mut self, block: &syn::Block) {
-        self.translate_block_with_mut_params(block, &[]);
+        self.translate_block_with_preamble(block, &[]);
     }
 
-    pub fn translate_block_with_mut_params(&mut self, block: &syn::Block, mut_params: &[String]) {
+    pub fn translate_block_with_preamble(&mut self, block: &syn::Block, preamble: &[String]) {
         writeln!(self.out, "{{").unwrap();
         self.indent();
-        for name in mut_params {
+        for line in preamble {
             let pad = self.pad();
-            writeln!(self.out, "{}var {name} = _{name};", pad, name = name).unwrap();
+            writeln!(self.out, "{}{}", pad, line).unwrap();
         }
         let stmts = &block.stmts;
         for (i, stmt) in stmts.iter().enumerate() {

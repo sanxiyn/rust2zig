@@ -20,6 +20,10 @@ impl Rust2Zig {
             }
             syn::Expr::Match(em) => self.translate_match(em),
             syn::Expr::MethodCall(emc) => self.translate_method_call(emc),
+            syn::Expr::Reference(er) => {
+                write!(self.out, "&").unwrap();
+                self.translate_expr(&er.expr);
+            }
             syn::Expr::Path(ep) => {
                 let mode = self.path_mode(&ep.path);
                 if matches!(mode, PathMode::EnumVariant) {
@@ -134,16 +138,57 @@ impl Rust2Zig {
     }
 
     fn translate_for_loop(&mut self, efl: &syn::ExprForLoop) {
-        let is_array = if let syn::Expr::Path(ep) = &*efl.expr {
+        if let syn::Expr::Range(er) = &*efl.expr {
+            let (Some(start), Some(end)) = (&er.start, &er.end) else {
+                write!(self.out, "/* TODO: for */").unwrap();
+                return;
+            };
+            let pi = if let syn::Pat::Ident(pi) = &*efl.pat { pi } else {
+                write!(self.out, "/* TODO: for */").unwrap();
+                return;
+            };
+            let name = pi.ident.to_string();
+            let ty = self.scip.type_at(&pi.ident.span().into());
+            let mut ty_str = String::new();
+            if let Some(ty) = &ty {
+                let saved = std::mem::take(&mut self.out);
+                self.translate_type(ty);
+                ty_str = std::mem::replace(&mut self.out, saved);
+            }
+            let preamble = vec![if ty_str.is_empty() {
+                format!("const {name} = _{name};")
+            } else {
+                format!("const {name}: {ty_str} = @intCast(_{name});")
+            }];
+            write!(self.out, "for (").unwrap();
+            self.translate_expr(start);
+            write!(self.out, "..").unwrap();
+            if matches!(er.limits, syn::RangeLimits::Closed(_)) {
+                if let syn::Expr::Lit(syn::ExprLit { lit: syn::Lit::Int(n), .. }) = &**end {
+                    let v: u64 = n.base10_parse().unwrap();
+                    write!(self.out, "{}", v + 1).unwrap();
+                } else {
+                    self.translate_expr(end);
+                    write!(self.out, " + 1").unwrap();
+                }
+            } else {
+                self.translate_expr(end);
+            }
+            write!(self.out, ") |_{}| ", name).unwrap();
+            self.translate_block_with_preamble(&efl.body, &preamble);
+            return;
+        }
+        let is_iterable = if let syn::Expr::Path(ep) = &*efl.expr {
             let ident = &ep.path.segments.last().unwrap().ident;
-            matches!(
-                self.scip.type_at(&ident.span().into()),
-                Some(syn::Type::Array(_))
-            )
+            match self.scip.type_at(&ident.span().into()) {
+                Some(syn::Type::Array(_)) => true,
+                Some(syn::Type::Reference(tr)) => matches!(*tr.elem, syn::Type::Slice(_)),
+                _ => false,
+            }
         } else {
             false
         };
-        if !is_array {
+        if !is_iterable {
             write!(self.out, "/* TODO: for */").unwrap();
             return;
         }
