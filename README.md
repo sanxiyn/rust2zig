@@ -7,8 +7,9 @@ translated. Generated Zig should be suitable for human consumption.
 
 * Written in Rust, using `syn` for parsing
 * Use SCIP for semantic information
-* Rust generics are translated to Zig comptime
+* Rust generics are translated to Zig comptime (enums, functions, and methods)
 * Rust references are translated to Zig pointers, lifetimes are erased
+* Identifiers that collide with Zig keywords are emitted as `@"name"`
 
 ### Code structure
 
@@ -32,8 +33,9 @@ translated. Generated Zig should be suitable for human consumption.
 
 ### Analysis pass
 
-Pre-translation pass (`analyze`) collects metadata from the AST into two
-maps: `HashMap<String, Enum>` and `HashMap<String, Struct>`.
+Pre-translation pass (`analyze`) collects metadata from the AST into three
+maps: `HashMap<String, Enum>`, `HashMap<String, Struct>`, and
+`HashMap<String, GenericFn>` (keyed by SCIP symbol).
 
 `Enum` has:
 * `has_data: bool`: whether any variant has fields
@@ -43,8 +45,19 @@ maps: `HashMap<String, Enum>` and `HashMap<String, Struct>`.
 `Struct` has:
 * `impls: Vec<syn::ItemImpl>`: collected impl blocks
 
-The analysis pass runs in two phases: first collects enum and struct decls,
-then attaches each impl block to its corresponding enum or struct.
+`GenericFn` has:
+* `type_params: Vec<String>`: declared type param names in source order
+* `param_arg_index: Vec<GenericArgRef>`: for each type param, where to
+  find its instantiation at a call site. `GenericArgRef { arg, path }`
+  means: take call argument `arg`, then drill into its type via
+  `path` (a sequence of generic argument positions). Bare `T` is `path: []`,
+  `Option<T>` is `path: [0]`, `HashMap<K, T>` is `path: [1]`.
+
+The analysis pass runs in two phases: first collects enum and struct decls
+(and registers free generic fns), then attaches each impl block to its
+enclosing enum/struct (and registers generic methods inside impls).
+`register_generic_fn` skips a fn entirely if any type param can't be
+located in some param's type via `find_type_param`.
 
 ### SCIP integration
 
@@ -79,7 +92,9 @@ Both suites accept optional name arguments (e.g. `./test.sh gcd divmod`) to
 run a subset; with no arguments, all examples run.
 
 Examples currently passing both suites: gcd, direction, div, option, result,
-ratio (struct), divmod (tuple), sum (for loop), geometry, closure.
+ratio (struct), divmod (tuple), sum (for loop), geometry, closure, min
+(generic function). The `option` example also exercises a generic method
+(`Option::and`).
 
 ## Notes
 
@@ -101,6 +116,21 @@ ratio (struct), divmod (tuple), sum (for loop), geometry, closure.
   `closure_return_type`. `has_capture` (a `syn::visit` walk that compares
   each ident's SCIP definition range against the closure span) gates the
   translation — capturing closures fall back to a TODO.
+* Generic functions/methods: each declared type param is emitted as
+  `comptime T: type`. For functions, comptime params come first; for
+  methods they come after `self: Self` so the call site
+  `obj.m(T, x)` desugars correctly. At call sites the analysis-time
+  `GenericArgRef` says which call argument carries the instantiation;
+  `Scip::type_at` on that argument ident gives a concrete type, then
+  `peel_type` walks the recorded path (e.g. `[0]` for `Option<U>`) to
+  extract the substituted type. The resolved type is emitted as the
+  first argument(s). Detection requires the call argument to be a
+  `Variable`/`Parameter` ident (so SCIP `type_at` works) and references
+  in param types are not yet peeled.
+* Zig keyword identifiers: `escape_zig` wraps reserved words like `and`,
+  `or`, `var` in `@"..."` so e.g. `Option::and` translates to
+  `fn @"and"(...)` and call sites become `x.@"and"(...)`. Applied to function
+  names and method names.
 
 ## Bugs
 

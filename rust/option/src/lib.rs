@@ -4,6 +4,20 @@ pub enum Option<T> {
 }
 
 impl<T> Option<T> {
+    pub fn and<U>(self, optb: Option<U>) -> Option<U> {
+        match self {
+            Option::Some(_) => optb,
+            Option::None => Option::None,
+        }
+    }
+
+    pub fn is_none(&self) -> bool {
+        match self {
+            Option::Some(_) => false,
+            Option::None => true,
+        }
+    }
+
     pub fn is_some(&self) -> bool {
         match self {
             Option::Some(_) => true,
@@ -26,4 +40,6 @@ fn test_option() {
     assert_eq!(true, x.is_some());
     assert_eq!(false, y.is_some());
     assert_eq!(42, x.unwrap());
+    let z: Option<i32> = Option::Some(7);
+    assert_eq!(true, y.and(z).is_none());
 }

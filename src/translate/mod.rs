@@ -27,6 +27,23 @@ pub fn camel_to_snake(s: &str) -> String {
     result
 }
 
+pub fn escape_zig(name: &str) -> String {
+    const ZIG_KEYWORDS: &[&str] = &[
+        "addrspace", "align", "allowzero", "and", "anyframe", "anytype",
+        "asm", "break", "callconv", "catch", "comptime", "const", "continue",
+        "defer", "else", "enum", "errdefer", "error", "export", "extern",
+        "fn", "for", "if", "inline", "linksection", "noalias", "noinline",
+        "nosuspend", "opaque", "or", "orelse", "packed", "pub", "resume",
+        "return", "struct", "suspend", "switch", "test", "threadlocal",
+        "try", "union", "unreachable", "var", "volatile", "while",
+    ];
+    if ZIG_KEYWORDS.contains(&name) {
+        format!("@\"{}\"", name)
+    } else {
+        name.to_string()
+    }
+}
+
 pub fn snake_to_camel(s: &str) -> String {
     let mut result: String = Default::default();
     let mut capitalize_next = false;
@@ -58,9 +75,50 @@ pub struct Struct {
     pub impls: Vec<syn::ItemImpl>,
 }
 
+pub struct GenericArgRef {
+    pub arg: usize,
+    pub path: Vec<usize>,
+}
+
+pub struct GenericFn {
+    pub type_params: Vec<String>,
+    pub param_arg_index: Vec<GenericArgRef>,
+}
+
+pub fn find_type_param(ty: &syn::Type, name: &str) -> Option<Vec<usize>> {
+    let syn::Type::Path(tp) = ty else { return None };
+    if tp.path.is_ident(name) {
+        return Some(Vec::new());
+    }
+    let last = tp.path.segments.last()?;
+    let syn::PathArguments::AngleBracketed(ab) = &last.arguments else { return None };
+    for (i, ga) in ab.args.iter().enumerate() {
+        let syn::GenericArgument::Type(inner) = ga else { continue };
+        if let Some(mut sub) = find_type_param(inner, name) {
+            let mut path = vec![i];
+            path.append(&mut sub);
+            return Some(path);
+        }
+    }
+    None
+}
+
+pub fn peel_type<'a>(mut ty: &'a syn::Type, path: &[usize]) -> Option<&'a syn::Type> {
+    for &idx in path {
+        let syn::Type::Path(tp) = ty else { return None };
+        let last = tp.path.segments.last()?;
+        let syn::PathArguments::AngleBracketed(ab) = &last.arguments else { return None };
+        let ga = ab.args.iter().nth(idx)?;
+        let syn::GenericArgument::Type(inner) = ga else { return None };
+        ty = inner;
+    }
+    Some(ty)
+}
+
 pub struct Rust2Zig {
     pub enums: HashMap<String, Enum>,
     pub structs: HashMap<String, Struct>,
+    pub generic_fns: HashMap<String, GenericFn>,
     pub scip: Scip,
     out: String,
     indent: usize,
@@ -71,6 +129,7 @@ impl Rust2Zig {
         Rust2Zig {
             enums: Default::default(),
             structs: Default::default(),
+            generic_fns: Default::default(),
             scip,
             out: Default::default(),
             indent: Default::default(),
@@ -118,6 +177,9 @@ impl Rust2Zig {
                     let name = s.ident.to_string();
                     self.structs.insert(name, Struct { impls: Default::default() });
                 }
+                syn::Item::Fn(f) => {
+                    self.register_generic_fn(&f.sig);
+                }
                 _ => {}
             }
         }
@@ -131,9 +193,43 @@ impl Rust2Zig {
                     } else if let Some(s) = self.structs.get_mut(&name) {
                         s.impls.push(i.clone());
                     }
+                    for ii in &i.items {
+                        if let syn::ImplItem::Fn(m) = ii {
+                            self.register_generic_fn(&m.sig);
+                        }
+                    }
                 }
             }
         }
+    }
+
+    fn register_generic_fn(&mut self, sig: &syn::Signature) {
+        let type_params: Vec<String> = sig.generics.params.iter().filter_map(|p| {
+            if let syn::GenericParam::Type(tp) = p {
+                Some(tp.ident.to_string())
+            } else {
+                None
+            }
+        }).collect();
+        if type_params.is_empty() {
+            return;
+        }
+        let mut param_arg_index = Vec::with_capacity(type_params.len());
+        for tp in &type_params {
+            let mut found: Option<GenericArgRef> = None;
+            for (i, arg) in sig.inputs.iter().filter(|x| matches!(x, syn::FnArg::Typed(_))).enumerate() {
+                let syn::FnArg::Typed(pt) = arg else { continue };
+                if let Some(path) = find_type_param(&pt.ty, tp) {
+                    found = Some(GenericArgRef { arg: i, path });
+                    break;
+                }
+            }
+            let Some(r) = found else { return };
+            param_arg_index.push(r);
+        }
+        let range: Range = sig.ident.span().into();
+        let Some(symbol) = self.scip.symbol_at(&range) else { return };
+        self.generic_fns.insert(symbol.to_string(), GenericFn { type_params, param_arg_index });
     }
 
     pub fn has_capture(&self, ec: &syn::ExprClosure) -> bool {

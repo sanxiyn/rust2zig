@@ -1,6 +1,6 @@
 use std::fmt::Write;
 
-use super::{Rust2Zig, camel_to_snake, snake_to_camel};
+use super::{Rust2Zig, camel_to_snake, escape_zig, snake_to_camel};
 
 impl Rust2Zig {
     pub fn translate_item(&mut self, item: &syn::Item) {
@@ -157,21 +157,38 @@ impl Rust2Zig {
 
     fn translate_method(&mut self, method: &syn::ImplItemFn) {
         let pad = self.pad();
-        let name = snake_to_camel(&method.sig.ident.to_string());
+        let name = escape_zig(&snake_to_camel(&method.sig.ident.to_string()));
         write!(self.out, "{}fn {}(", pad, name).unwrap();
-        for (i, arg) in method.sig.inputs.iter().enumerate() {
-            if i > 0 {
+        let type_params: Vec<String> = self.scip.symbol_at(&method.sig.ident.span().into())
+            .and_then(|s| self.generic_fns.get(s))
+            .map(|gf| gf.type_params.clone())
+            .unwrap_or_default();
+        let mut first = true;
+        for arg in method.sig.inputs.iter() {
+            if let syn::FnArg::Receiver(_) = arg {
+                if !first {
+                    write!(self.out, ", ").unwrap();
+                }
+                first = false;
+                write!(self.out, "self: Self").unwrap();
+            }
+        }
+        for tp in &type_params {
+            if !first {
                 write!(self.out, ", ").unwrap();
             }
-            match arg {
-                syn::FnArg::Receiver(_) => {
-                    write!(self.out, "self: Self").unwrap();
+            first = false;
+            write!(self.out, "comptime {}: type", tp).unwrap();
+        }
+        for arg in method.sig.inputs.iter() {
+            if let syn::FnArg::Typed(pat_type) = arg {
+                if !first {
+                    write!(self.out, ", ").unwrap();
                 }
-                syn::FnArg::Typed(pat_type) => {
-                    self.translate_pat(&pat_type.pat);
-                    write!(self.out, ": ").unwrap();
-                    self.translate_type(&pat_type.ty);
-                }
+                first = false;
+                self.translate_pat(&pat_type.pat);
+                write!(self.out, ": ").unwrap();
+                self.translate_type(&pat_type.ty);
             }
         }
         write!(self.out, ") ").unwrap();
@@ -206,12 +223,25 @@ impl Rust2Zig {
             }
         }
 
-        write!(self.out, "fn {}", snake_to_camel(&name.to_string())).unwrap();
+        write!(self.out, "fn {}", escape_zig(&snake_to_camel(&name.to_string()))).unwrap();
         write!(self.out, "(").unwrap();
-        for (i, arg) in f.sig.inputs.iter().enumerate() {
-            if i > 0 {
+        let mut first = true;
+        let type_params: Vec<String> = self.scip.symbol_at(&name.span().into())
+            .and_then(|s| self.generic_fns.get(s))
+            .map(|gf| gf.type_params.clone())
+            .unwrap_or_default();
+        for tp in &type_params {
+            if !first {
                 write!(self.out, ", ").unwrap();
             }
+            first = false;
+            write!(self.out, "comptime {}: type", tp).unwrap();
+        }
+        for arg in f.sig.inputs.iter() {
+            if !first {
+                write!(self.out, ", ").unwrap();
+            }
+            first = false;
             self.translate_fn_arg(arg, &mut_params);
         }
         write!(self.out, ") ").unwrap();

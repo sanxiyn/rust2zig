@@ -7,6 +7,20 @@ fn Option(comptime T: type) type {
         some: T,
         none,
 
+        fn @"and"(self: Self, comptime U: type, optb: Option(U)) Option(U) {
+            return switch (self) {
+                .some => optb,
+                .none => .none,
+            };
+        }
+
+        fn isNone(self: Self) bool {
+            return switch (self) {
+                .some => false,
+                .none => true,
+            };
+        }
+
         fn isSome(self: Self) bool {
             return switch (self) {
                 .some => true,
@@ -29,5 +43,7 @@ test "option" {
     try std.testing.expectEqual(true, x.isSome());
     try std.testing.expectEqual(false, y.isSome());
     try std.testing.expectEqual(42, x.unwrap());
+    const z: Option(i32) = .{ .some = 7 };
+    try std.testing.expectEqual(true, y.@"and"(i32, z).isNone());
 }
 

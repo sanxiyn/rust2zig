@@ -1,0 +1,22 @@
+First, read README.md.
+Explore the project to see what is implemented so far.
+We handle generic enums but not generic functions. Write an example, min, which is generic over T: Ord.
+Yes, write the expected Zig output.
+Yeah, but where do we get i32 from?
+Rewrite with typed locals, but I don't think we need type annotations.
+Is the idea that, when we find <T>, we look for a: T and give type of a?
+Let's implement it.
+Can we handle generic methods similarly as well?
+Wait, doesn't that lead to collision when method names on different types are same?
+Yes, key by SCIP symbol.
+I think previous enumerate() was fine.
+Yes.
+Let's discuss what example to add for generic methods.
+How about adding Option::and to option example?
+Let's design this a little. How would we change param_arg_index?
+Looks good, skip references for now.
+Just assert x.and(y).is_none().
+async, await, usingnamepsace are no more Zig keywords.
+How do you think things are going so far?
+Update README and memory as needed to reflect the current status.
+/exit
