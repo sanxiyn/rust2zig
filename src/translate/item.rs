@@ -183,35 +183,39 @@ impl Rust2Zig {
 
     fn translate_fn(&mut self, f: &syn::ItemFn) {
         let name = &f.sig.ident;
-        let is_main = name == "main";
+        let is_test = f.attrs.iter().any(|a| a.path().is_ident("test"));
+
+        if is_test {
+            let n = name.to_string();
+            let test_name = n.strip_prefix("test_").unwrap_or(&n);
+            write!(self.out, "test \"{}\" ", test_name).unwrap();
+            self.translate_block(&f.block);
+            writeln!(self.out).unwrap();
+            writeln!(self.out).unwrap();
+            return;
+        }
 
         let mut mut_params: Vec<String> = Default::default();
-        if !is_main {
-            for arg in &f.sig.inputs {
-                if let syn::FnArg::Typed(pat_type) = arg {
-                    if let syn::Pat::Ident(pi) = &*pat_type.pat {
-                        if pi.mutability.is_some() {
-                            mut_params.push(pi.ident.to_string());
-                        }
+        for arg in &f.sig.inputs {
+            if let syn::FnArg::Typed(pat_type) = arg {
+                if let syn::Pat::Ident(pi) = &*pat_type.pat {
+                    if pi.mutability.is_some() {
+                        mut_params.push(pi.ident.to_string());
                     }
                 }
             }
         }
 
-        if is_main {
-            write!(self.out, "pub fn main() void").unwrap();
-        } else {
-            write!(self.out, "fn {}", snake_to_camel(&name.to_string())).unwrap();
-            write!(self.out, "(").unwrap();
-            for (i, arg) in f.sig.inputs.iter().enumerate() {
-                if i > 0 {
-                    write!(self.out, ", ").unwrap();
-                }
-                self.translate_fn_arg(arg, &mut_params);
+        write!(self.out, "fn {}", snake_to_camel(&name.to_string())).unwrap();
+        write!(self.out, "(").unwrap();
+        for (i, arg) in f.sig.inputs.iter().enumerate() {
+            if i > 0 {
+                write!(self.out, ", ").unwrap();
             }
-            write!(self.out, ") ").unwrap();
-            self.translate_return_type(&f.sig.output);
+            self.translate_fn_arg(arg, &mut_params);
         }
+        write!(self.out, ") ").unwrap();
+        self.translate_return_type(&f.sig.output);
 
         write!(self.out, " ").unwrap();
         let preamble: Vec<String> = mut_params

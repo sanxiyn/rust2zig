@@ -7,15 +7,6 @@ const Direction = enum {
     west,
 };
 
-fn toString(d: Direction) []const u8 {
-    return switch (d) {
-        .north => "North",
-        .east => "East",
-        .south => "South",
-        .west => "West",
-    };
-}
-
 fn opposite(d: Direction) Direction {
     return switch (d) {
         .north => .south,
@@ -25,10 +16,10 @@ fn opposite(d: Direction) Direction {
     };
 }
 
-pub fn main() void {
-    std.debug.print("{s}\n", .{toString(opposite(.north))});
-    std.debug.print("{s}\n", .{toString(opposite(.east))});
-    std.debug.print("{s}\n", .{toString(opposite(.south))});
-    std.debug.print("{s}\n", .{toString(opposite(.west))});
+test "direction" {
+    try std.testing.expectEqual(.south, opposite(.north));
+    try std.testing.expectEqual(.west, opposite(.east));
+    try std.testing.expectEqual(.north, opposite(.south));
+    try std.testing.expectEqual(.east, opposite(.west));
 }
 

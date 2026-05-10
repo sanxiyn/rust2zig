@@ -20,7 +20,7 @@ translated. Generated Zig should be suitable for human consumption.
   (path, case conversion, check_moniker, path_mode)
 * `src/translate/expr.rs`: expression translation
 * `src/translate/item.rs`: item translation (enum, struct, method, fn)
-* `src/translate/mac.rs`: macro translation (`panic!`, `println!`)
+* `src/translate/mac.rs`: macro translation (`assert_eq!`, `panic!`, `println!`)
 * `src/translate/pat.rs`: pattern translation
 * `src/translate/stmt.rs`: statement and block translation
 * `src/translate/ty.rs`: type translation
@@ -71,9 +71,12 @@ rust-analyzer SCIP dumps provide semantic information.
 output byte-for-byte against the corresponding files under `zig`. Expected
 files are regenerated from translator output after each change.
 
-`test_test.sh` compiles and runs original Rust examples and translated Zig
-examples and compares output against expected output under `out`. This ensures
-input/output pairs used to test the translator is in fact equivalent.
+`test_test.sh` runs `cargo test` on each Rust example and `zig test` on the
+corresponding translated Zig file. This ensures the input/output pairs used
+to test the translator are in fact equivalent.
+
+Both suites accept optional name arguments (e.g. `./test.sh gcd divmod`) to
+run a subset; with no arguments, all examples run.
 
 Examples currently passing both suites: gcd, direction, div, option, result,
 ratio (struct), divmod (tuple), sum (for loop), geometry, closure.

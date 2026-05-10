@@ -13,7 +13,7 @@ fn main() {
     }
     let package_dir = Path::new(&args[1]);
     let scip = scip::load(package_dir);
-    let source = fs::read_to_string(package_dir.join("src/main.rs")).expect("failed to read source");
+    let source = fs::read_to_string(package_dir.join("src/lib.rs")).expect("failed to read source");
     let file = syn::parse_file(&source).expect("failed to parse");
     let mut rust2zig = translate::Rust2Zig::new(scip);
     rust2zig.analyze(&file);

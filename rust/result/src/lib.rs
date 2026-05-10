@@ -1,17 +1,17 @@
-enum Result<T, E> {
+pub enum Result<T, E> {
     Ok(T),
     Err(E),
 }
 
 impl<T, E> Result<T, E> {
-    fn is_ok(&self) -> bool {
+    pub fn is_ok(&self) -> bool {
         match self {
             Result::Ok(_) => true,
             Result::Err(_) => false,
         }
     }
 
-    fn is_err(&self) -> bool {
+    pub fn is_err(&self) -> bool {
         match self {
             Result::Ok(_) => false,
             Result::Err(_) => true,
@@ -20,9 +20,10 @@ impl<T, E> Result<T, E> {
 
 }
 
-fn main() {
+#[test]
+fn test_result() {
     let x: Result<u32, u32> = Result::Ok(42);
     let y: Result<u32, u32> = Result::Err(1);
-    println!("{}", x.is_ok());
-    println!("{}", y.is_err());
+    assert_eq!(true, x.is_ok());
+    assert_eq!(true, y.is_err());
 }

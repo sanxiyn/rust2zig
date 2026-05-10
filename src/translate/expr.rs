@@ -269,14 +269,14 @@ impl Rust2Zig {
                 || captures.iter().any(|(_, acc)| acc.starts_with('.'));
             if use_block {
                 let payload = format!("_{}", variant.unwrap());
-                writeln!(self.out, "|{}| {{", payload).unwrap();
+                writeln!(self.out, "|{}| blk: {{", payload).unwrap();
                 self.indent();
                 for (capture, accessor) in &captures {
                     let pad = self.pad();
                     writeln!(self.out, "{}const {} = {}{};", pad, capture, payload, accessor).unwrap();
                 }
                 let pad = self.pad();
-                write!(self.out, "{}", pad).unwrap();
+                write!(self.out, "{}break :blk ", pad).unwrap();
                 self.translate_expr(&arm.body);
                 writeln!(self.out, ";").unwrap();
                 self.dedent();

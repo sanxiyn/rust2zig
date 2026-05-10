@@ -4,7 +4,10 @@ use super::Rust2Zig;
 
 impl Rust2Zig {
     pub fn translate_macro(&mut self, mac: &syn::Macro) -> bool {
-        if self.check_moniker(&mac.path, "std::macros::panic") {
+        if self.check_moniker(&mac.path, "core::macros::assert_eq") {
+            self.translate_assert_eq(mac);
+            true
+        } else if self.check_moniker(&mac.path, "std::macros::panic") {
             self.translate_panic(mac);
             true
         } else if self.check_moniker(&mac.path, "std::macros::println") {
@@ -13,6 +16,21 @@ impl Rust2Zig {
         } else {
             false
         }
+    }
+
+    fn translate_assert_eq(&mut self, mac: &syn::Macro) {
+        use syn::parse::Parser;
+        use syn::punctuated::Punctuated;
+        let parser = Punctuated::<syn::Expr, syn::Token![,]>::parse_terminated;
+        let args = parser.parse2(mac.tokens.clone()).expect("failed to parse assert_eq args");
+        write!(self.out, "try std.testing.expectEqual(").unwrap();
+        for (i, arg) in args.iter().enumerate() {
+            if i > 0 {
+                write!(self.out, ", ").unwrap();
+            }
+            self.translate_expr(arg);
+        }
+        write!(self.out, ")").unwrap();
     }
 
     fn translate_panic(&mut self, mac: &syn::Macro) {

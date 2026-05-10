@@ -1,4 +1,4 @@
-fn sum(xs: &[i32]) -> i32 {
+pub fn sum(xs: &[i32]) -> i32 {
     let mut total = 0;
     for x in xs {
         total += x;
@@ -6,17 +6,18 @@ fn sum(xs: &[i32]) -> i32 {
     total
 }
 
-fn main() {
+#[test]
+fn test_sum() {
     let xs = [1, 2, 3, 4, 5];
     let mut total = 0;
     for x in xs {
         total += x;
     }
-    println!("{}", total);
-    println!("{}", sum(&xs));
+    assert_eq!(15, total);
+    assert_eq!(15, sum(&xs));
     total = 0;
     for x in 1..=5 {
         total += x;
     }
-    println!("{}", total);
+    assert_eq!(15, total);
 }

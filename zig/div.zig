@@ -8,16 +8,8 @@ fn div(a: u32, b: u32) ?u32 {
     }
 }
 
-pub fn main() void {
-    if (div(6, 3)) |x| {
-        std.debug.print("{}\n", .{x});
-    } else {
-        std.debug.print("not divisible\n", .{});
-    }
-    if (div(7, 3)) |x| {
-        std.debug.print("{}\n", .{x});
-    } else {
-        std.debug.print("not divisible\n", .{});
-    }
+test "div" {
+    try std.testing.expectEqual(2, div(6, 3));
+    try std.testing.expectEqual(null, div(7, 3));
 }
 

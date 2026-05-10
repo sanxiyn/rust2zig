@@ -25,12 +25,14 @@ const Ratio = struct {
     }
 };
 
-pub fn main() void {
+test "ratio" {
     const a: Ratio = Ratio{ .num = 1, .denom = 2 };
     const b: Ratio = Ratio{ .num = 1, .denom = 3 };
     const c: Ratio = a.add(b);
-    std.debug.print("{}/{}\n", .{ c.num, c.denom });
+    try std.testing.expectEqual(5, c.num);
+    try std.testing.expectEqual(6, c.denom);
     const d: Ratio = b.add(b);
-    std.debug.print("{}/{}\n", .{ d.num, d.denom });
+    try std.testing.expectEqual(2, d.num);
+    try std.testing.expectEqual(3, d.denom);
 }
 

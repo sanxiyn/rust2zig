@@ -6,7 +6,16 @@ cargo build --quiet
 pass=0
 fail=0
 
-for dir in rust/*/; do
+if [ "$#" -gt 0 ]; then
+    dirs=""
+    for name in "$@"; do
+        dirs="$dirs rust/$name/"
+    done
+else
+    dirs=rust/*/
+fi
+
+for dir in $dirs; do
     name=$(basename "$dir")
     expected="zig/${name}.zig"
     if [ ! -f "$expected" ]; then
@@ -14,11 +23,6 @@ for dir in rust/*/; do
         continue
     fi
     cargo run --quiet -- "$dir" > "/tmp/rust2zig_${name}.zig"
-    if [ "$name" = "direction" ]; then
-        sed -i 's/{}/{s}/g' "/tmp/rust2zig_${name}.zig"
-    elif [ "$name" = "option" ]; then
-        sed -i '/unwrap/s/{}/{d}/' "/tmp/rust2zig_${name}.zig"
-    fi
     if diff -q "$expected" "/tmp/rust2zig_${name}.zig" > /dev/null 2>&1; then
         echo "PASS $name"
         pass=$((pass + 1))

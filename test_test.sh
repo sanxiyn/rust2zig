@@ -4,24 +4,26 @@ set -e
 pass=0
 fail=0
 
-for expected in out/*; do
-    name=$(basename "$expected")
+if [ "$#" -gt 0 ]; then
+    dirs=""
+    for name in "$@"; do
+        dirs="$dirs rust/$name/"
+    done
+else
+    dirs=rust/*/
+fi
+
+for dir in $dirs; do
+    name=$(basename "$dir")
     rust_dir="rust/${name}"
     zig_file="zig/${name}.zig"
 
-    if [ ! -d "$rust_dir" ]; then
-        echo "SKIP $name (no rust package)"
-        continue
-    fi
-
     # Test Rust
-    rust_out=$(cd "$rust_dir" && cargo run --quiet 2>&1)
-    if echo "$rust_out" | diff -q "$expected" - > /dev/null 2>&1; then
+    if (cd "$rust_dir" && cargo test --quiet) > /dev/null 2>&1; then
         echo "PASS $name (rust)"
         pass=$((pass + 1))
     else
         echo "FAIL $name (rust)"
-        echo "$rust_out" | diff -u "$expected" - || true
         fail=$((fail + 1))
     fi
 
@@ -30,13 +32,11 @@ for expected in out/*; do
         echo "SKIP $name (no zig output)"
         continue
     fi
-    zig_out=$(zig run "$zig_file" 2>&1)
-    if echo "$zig_out" | diff -q "$expected" - > /dev/null 2>&1; then
+    if zig test "$zig_file" > /dev/null 2>&1; then
         echo "PASS $name (zig)"
         pass=$((pass + 1))
     else
         echo "FAIL $name (zig)"
-        echo "$zig_out" | diff -u "$expected" - || true
         fail=$((fail + 1))
     fi
 done

@@ -23,11 +23,11 @@ fn Option(comptime T: type) type {
     };
 }
 
-pub fn main() void {
+test "option" {
     const x: Option(u32) = .{ .some = 42 };
     const y: Option(u32) = .none;
-    std.debug.print("{}\n", .{x.isSome()});
-    std.debug.print("{}\n", .{y.isSome()});
-    std.debug.print("{d}\n", .{x.unwrap()});
+    try std.testing.expectEqual(true, x.isSome());
+    try std.testing.expectEqual(false, y.isSome());
+    try std.testing.expectEqual(42, x.unwrap());
 }
 

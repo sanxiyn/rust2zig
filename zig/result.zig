@@ -23,10 +23,10 @@ fn Result(comptime T: type, comptime E: type) type {
     };
 }
 
-pub fn main() void {
+test "result" {
     const x: Result(u32, u32) = .{ .ok = 42 };
     const y: Result(u32, u32) = .{ .err = 1 };
-    std.debug.print("{}\n", .{x.isOk()});
-    std.debug.print("{}\n", .{y.isErr()});
+    try std.testing.expectEqual(true, x.isOk());
+    try std.testing.expectEqual(true, y.isErr());
 }
 

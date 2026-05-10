@@ -1,0 +1,38 @@
+First, read README.md.
+Let's enhance test.sh so that we can run specific tests. ./test.sh still runs all tests, but ./test.sh gcd just tests gcd, ./test.sh gcd divmod just tests those two, etc.
+Can't it be just dirs=rust/*/? Is echo required?
+Do the same for test_test.sh as well.
+Rust and Zig both have testing support (#[test] and test keyword). I want to migrate to that instead of current output based testing. Is this a good idea?
+Convert gcd test to use testing support, and after that we will implement testing support in the translator.
+Rust version and Zig version have different argument order. As I understand Zig specifies (expected, actual) argument order, whereas Rust is unspecified. So let's change Rust version to Zig order.
+To avoid warnings, you should make gcd public in Rust.
+Now implement testing support in the translator.
+That's the wrong directory.
+To regenerate SCIP index in rust/gcd, you should run rust-analyzer in that directory.
+I regenerated the index for you, because you kept doing it wrong.
+Yes, update test_test.sh to run test if it is lib.rs test.
+Let's migrate other tests as well, first divmod.
+You can do that by running (cd rust/divmod; rust-analyzer scip .)
+Do ratio.
+Do option and result.
+Do closure.
+Do sum.
+I think other tests are somewhat tricky. How do you think direction should be migrated?
+Drop to_string and derive PartialEq and Debug for direction.
+Shouldn't expected be .south etc not Direction.south?
+Be careful with the trailing newline, it is there for a reason (although it should be fixed someday).
+How should geometry be migrated?
+bounding_box sounds great. Do that.
+bounding_box for Line is not correct, isn't it?
+Let's use Line(Point(1, 2), Point(2, 1)) and Circle(Point(2, 2), 1) for examples.
+How should div be migrated?
+You can do that, but doesn't that make `if let` translation uncovered by any test?
+No. Just assert_eq Some and None. I think I will do another coverage run and add tests systematically.
+Cleanup test_test.sh.
+Update README.
+Now we are migrated, let's read src/lib.rs unconditionally, not src/main.rs.
+Yes, let's cleanup is_main.
+How do you think things are going so far?
+Update memory as needed to reflect the current status.
+/insights
+/exit
