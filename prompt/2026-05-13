@@ -1,0 +1,24 @@
+First, read README.md.
+Today we will do refactoring. First, split name-related codes to name.rs. That includes camel to snake and snake to camel case conversion and keyword escaping.
+Split call-related codes (both function and method) to call.rs.
+Split control flow related codes to flow.rs. That includes for loop, if, and while. (And break, continue, and loop in the future.)
+Update README.
+Let's implement break, continue, and loop. We will start by writing an example. Let's name it iter. position([1, 2, 3, 4, 5], 3) = 2, for e in l, if e == v, break.
+How did we avoid this issue in the sum test?
+I think we should change Zig translation to capture the slice element by reference. The current situation is just asking for trouble.
+The plan looks good. Let's do it.
+That doesn't look right. Rust slice iteration produces references, but Rust array iteration produces values, and the code needs to handle both.
+Let's implement break.
+break should go to flow.rs.
+Yes, put it to memory that Rust array iterates by value but slice iterates by reference.
+In position(l, v), what happens v is not in l?
+Your example does not use break with value.
+Change the return type to Option<usize>. Keep the current structure and add if i == l.len() test at the end. Test with position([1, 2, 3, 4, 5], 6).
+Special case .len() on slice to be translated to .len.
+How do you plan to implement receiver check?
+Non-Path receiver handling is not ideal. We do it for for-loop due to lack of better alternatives, but simply checking SCIP symbol of .len() should work even for non-Path receivers.
+This should go to check_moniker, checking core::slice::len. Add check_moniker_ident and let check_moniker call it.
+How do you think things are going so far?
+Update README and memory as needed to reflect the current status.
+/insights
+/exit

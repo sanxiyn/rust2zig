@@ -18,10 +18,13 @@ translated. Generated Zig should be suitable for human consumption.
   exposes occurrence -> symbol and symbol -> (kind, signature) maps
 * `src/lsif.rs`: LSIF loader, currently unused (kept for reference)
 * `src/translate/mod.rs`: `Rust2Zig` struct, analysis pass, shared helpers
-  (path, case conversion, check_moniker, path_mode)
+  (path, check_moniker, path_mode)
+* `src/translate/call.rs`: function and method call translation
 * `src/translate/expr.rs`: expression translation
+* `src/translate/flow.rs`: control flow translation (for, if, while)
 * `src/translate/item.rs`: item translation (enum, struct, method, fn)
 * `src/translate/mac.rs`: macro translation (`assert_eq!`, `panic!`, `println!`)
+* `src/translate/name.rs`: name conversion (camel/snake case, keyword escaping)
 * `src/translate/pat.rs`: pattern translation
 * `src/translate/stmt.rs`: statement and block translation
 * `src/translate/ty.rs`: type translation
@@ -93,7 +96,7 @@ run a subset; with no arguments, all examples run.
 
 Examples currently passing both suites: gcd, direction, div, option, result,
 ratio (struct), divmod (tuple), sum (for loop), geometry, closure, min
-(generic function). The `option` example also exercises a generic method
+(generic function), iter. The `option` example also exercises a generic method
 (`Option::and`).
 
 ## Notes
@@ -101,11 +104,19 @@ ratio (struct), divmod (tuple), sum (for loop), geometry, closure, min
 * `let` bindings always emit a Zig type annotation resolved via
   `Scip::type_at` on the binding ident, ignoring any source-level
   Rust annotation (which may contain wildcards like `[T; _]`).
-* For loops translate when the iterable is an array, an `&[T]` slice
-  (treated identically — Zig captures the element directly), or a
-  range. Closed Rust ranges (`a..=b`) become `a..(b+1)` in Zig; the
-  capture is `usize`, so the body is wrapped with a preamble
+* For loops translate when the iterable is an array, an `&[T]` slice,
+  or a range. Arrays iterate by value (`for (xs) |x|`) matching Rust's
+  `for x in [T; N]`. Slices iterate by reference (`for (xs) |*x|`)
+  matching Rust's `for x in &[T]` yielding `&T`; uses of `x` need `.*`
+  in Zig, which `translate_unary` produces from Rust's `*x`. Closed
+  Rust ranges (`a..=b`) become `a..(b+1)` in Zig; the capture is
+  `usize`, so the body is wrapped with a preamble
   `const x: T = @intCast(_x);` using `Scip::type_at` on the loop var.
+* `break` (without label or value) translates verbatim. Labels and
+  break-with-value are TODO and only relevant once `loop` lands.
+* Slice `.len()` is special-cased in `translate_method_call`: detected
+  via `check_moniker_ident(method, "core::slice::len")` and emitted as
+  the Zig `.len` field access.
 * Block emission goes through `translate_block_with_preamble`, which
   takes pre-built lines inserted before the body — used by mutable-arg
   shadowing (`var a = _a;`) and range-loop intCast.
@@ -127,10 +138,10 @@ ratio (struct), divmod (tuple), sum (for loop), geometry, closure, min
   first argument(s). Detection requires the call argument to be a
   `Variable`/`Parameter` ident (so SCIP `type_at` works) and references
   in param types are not yet peeled.
-* Zig keyword identifiers: `escape_zig` wraps reserved words like `and`,
-  `or`, `var` in `@"..."` so e.g. `Option::and` translates to
-  `fn @"and"(...)` and call sites become `x.@"and"(...)`. Applied to function
-  names and method names.
+* Zig keyword identifiers: `escape_zig` (in `src/translate/name.rs`)
+  wraps reserved words like `and`, `or`, `var` in `@"..."` so e.g.
+  `Option::and` translates to `fn @"and"(...)` and call sites become
+  `x.@"and"(...)`. Applied to function names and method names.
 
 ## Bugs
 

@@ -1,6 +1,7 @@
 use std::fmt::Write;
 
-use super::{PathMode, Rust2Zig, camel_to_snake};
+use super::{PathMode, Rust2Zig};
+use super::name::camel_to_snake;
 
 impl Rust2Zig {
     pub fn translate_pat(&mut self, pat: &syn::Pat) {

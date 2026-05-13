@@ -1,6 +1,7 @@
 use std::fmt::Write;
 
-use super::{Rust2Zig, camel_to_snake, escape_zig, snake_to_camel};
+use super::Rust2Zig;
+use super::name::{camel_to_snake, escape_zig, snake_to_camel};
 
 impl Rust2Zig {
     pub fn translate_item(&mut self, item: &syn::Item) {

@@ -1,64 +1,20 @@
+use std::collections::HashMap;
+use std::fmt::Write;
+
+mod call;
 mod expr;
+mod flow;
 mod item;
 mod mac;
+mod name;
 mod pat;
 mod stmt;
 mod ty;
 
-use std::collections::HashMap;
-use std::fmt::Write;
-
 use crate::scip::{Kind, Range, Scip};
+use name::{camel_to_snake, snake_to_camel};
 
 const INDENT_SIZE: usize = 4;
-
-pub fn camel_to_snake(s: &str) -> String {
-    let mut result: String = Default::default();
-    for (i, c) in s.chars().enumerate() {
-        if c.is_ascii_uppercase() {
-            if i > 0 {
-                result.push('_');
-            }
-            result.push(c.to_ascii_lowercase());
-        } else {
-            result.push(c);
-        }
-    }
-    result
-}
-
-pub fn escape_zig(name: &str) -> String {
-    const ZIG_KEYWORDS: &[&str] = &[
-        "addrspace", "align", "allowzero", "and", "anyframe", "anytype",
-        "asm", "break", "callconv", "catch", "comptime", "const", "continue",
-        "defer", "else", "enum", "errdefer", "error", "export", "extern",
-        "fn", "for", "if", "inline", "linksection", "noalias", "noinline",
-        "nosuspend", "opaque", "or", "orelse", "packed", "pub", "resume",
-        "return", "struct", "suspend", "switch", "test", "threadlocal",
-        "try", "union", "unreachable", "var", "volatile", "while",
-    ];
-    if ZIG_KEYWORDS.contains(&name) {
-        format!("@\"{}\"", name)
-    } else {
-        name.to_string()
-    }
-}
-
-pub fn snake_to_camel(s: &str) -> String {
-    let mut result: String = Default::default();
-    let mut capitalize_next = false;
-    for c in s.chars() {
-        if c == '_' {
-            capitalize_next = true;
-        } else if capitalize_next {
-            result.push(c.to_ascii_uppercase());
-            capitalize_next = false;
-        } else {
-            result.push(c);
-        }
-    }
-    result
-}
 
 pub enum PathMode {
     Normal,
@@ -138,6 +94,10 @@ impl Rust2Zig {
 
     pub fn check_moniker(&self, path: &syn::Path, expected: &str) -> bool {
         let ident = &path.segments.last().unwrap().ident;
+        self.check_moniker_ident(ident, expected)
+    }
+
+    pub fn check_moniker_ident(&self, ident: &syn::Ident, expected: &str) -> bool {
         let range = ident.span().into();
         let Some(symbol) = self.scip.symbol_at(&range) else { return false };
         let suffix = match expected {
@@ -145,6 +105,7 @@ impl Rust2Zig {
             "core::option::Option" => "option/Option#",
             "core::option::Option::Some" => "option/Option#Some#",
             "core::option::Option::None" => "option/Option#None#",
+            "core::slice::len" => "slice/impl#[`[T]`]len().",
             "std::macros::panic" => "macros/panic!",
             "std::macros::println" => "macros/println!",
             _ => return false,

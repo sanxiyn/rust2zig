@@ -2,8 +2,8 @@ const std = @import("std");
 
 fn sum(xs: []const i32) i32 {
     var total: i32 = 0;
-    for (xs) |x| {
-        total += x;
+    for (xs) |*x| {
+        total += x.*;
     }
     return total;
 }
