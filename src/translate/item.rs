@@ -268,8 +268,6 @@ impl Rust2Zig {
                     } else {
                         write!(self.out, "{}", name).unwrap();
                     }
-                } else {
-                    self.translate_pat(&pat_type.pat);
                 }
                 write!(self.out, ": ").unwrap();
                 self.translate_type(&pat_type.ty);

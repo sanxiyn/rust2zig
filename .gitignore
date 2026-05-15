@@ -2,3 +2,4 @@ Cargo.lock
 target
 *.lsif
 index.scip
+coverage

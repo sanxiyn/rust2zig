@@ -57,10 +57,6 @@ impl Rust2Zig {
                     self.translate_type(&tr.elem);
                 }
             }
-            syn::Type::Slice(ts) => {
-                write!(self.out, "[]").unwrap();
-                self.translate_type(&ts.elem);
-            }
             syn::Type::Tuple(tt) => {
                 write!(self.out, "struct {{ ").unwrap();
                 for (i, elem) in tt.elems.iter().enumerate() {
