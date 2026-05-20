@@ -14,15 +14,15 @@ fn Option(comptime T: type) type {
             };
         }
 
-        fn isNone(self: Self) bool {
-            return switch (self) {
+        fn isNone(self: *const Self) bool {
+            return switch (self.*) {
                 .some => false,
                 .none => true,
             };
         }
 
-        fn isSome(self: Self) bool {
-            return switch (self) {
+        fn isSome(self: *const Self) bool {
+            return switch (self.*) {
                 .some => true,
                 .none => false,
             };

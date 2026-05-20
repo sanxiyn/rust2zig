@@ -113,9 +113,23 @@ impl Rust2Zig {
 
     fn translate_match(&mut self, em: &syn::ExprMatch) {
         write!(self.out, "switch (").unwrap();
+        let deref = self.match_needs_deref(em);
         self.translate_expr(&em.expr);
+        if deref {
+            write!(self.out, ".*").unwrap();
+        }
         write!(self.out, ") ").unwrap();
         self.translate_match_arms(&em.arms);
+    }
+
+    fn match_needs_deref(&self, em: &syn::ExprMatch) -> bool {
+        if em.arms.iter().any(|arm| matches!(arm.pat, syn::Pat::Reference(_))) {
+            return false;
+        }
+        let syn::Expr::Path(ep) = &*em.expr else { return false };
+        let Some(ident) = ep.path.get_ident() else { return false };
+        let Some(ty) = self.scip.type_at(&ident.span().into()) else { return false };
+        matches!(ty, syn::Type::Reference(_))
     }
 
     fn translate_match_arms(&mut self, arms: &[syn::Arm]) {

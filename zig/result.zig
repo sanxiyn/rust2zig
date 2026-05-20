@@ -7,15 +7,15 @@ fn Result(comptime T: type, comptime E: type) type {
         ok: T,
         err: E,
 
-        fn isOk(self: Self) bool {
-            return switch (self) {
+        fn isOk(self: *const Self) bool {
+            return switch (self.*) {
                 .ok => true,
                 .err => false,
             };
         }
 
-        fn isErr(self: Self) bool {
-            return switch (self) {
+        fn isErr(self: *const Self) bool {
+            return switch (self.*) {
                 .ok => false,
                 .err => true,
             };

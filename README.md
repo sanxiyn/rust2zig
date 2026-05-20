@@ -69,9 +69,10 @@ rust-analyzer SCIP dumps provide semantic information.
 * SCIP files: `rust/<name>/index.scip`, generated via `rust-analyzer scip .`
 * `Scip::symbol_at(range)`: resolves a source position to a SCIP symbol string
 * `Scip::kind_at(range)`: resolves to `SymbolInformation.Kind`
-* `Scip::type_at(range)`: for `Kind::Variable` and `Kind::Parameter`
-  symbols, parses the suffix after `: ` in `signature_documentation.text`
-  (e.g. `let xs: [i32; 5]`, `xs: &[i32]`) as `syn::Type`
+* `Scip::type_at(range)`: for `Kind::Variable`, `Kind::Parameter`, and
+  `Kind::SelfParameter` symbols, parses the suffix after `: ` in
+  `signature_documentation.text` (e.g. `let xs: [i32; 5]`, `xs: &[i32]`,
+  `self: &Option<T>`) as `syn::Type`
 * `SymbolInfo::range`: the definition occurrence's range (set from the
   occurrence carrying `SymbolRole::Definition`). Used by `has_capture`
   to tell outer locals from closure-introduced bindings.
@@ -96,8 +97,9 @@ run a subset; with no arguments, all examples run.
 
 Examples currently passing both suites: gcd, direction, div, option, result,
 ratio (struct), divmod (tuple), sum (for loop), geometry, closure, min
-(generic function), iter. The `option` example also exercises a generic method
-(`Option::and`).
+(generic function), iter, inc (`&mut T` and `&T` parameters), geometry2
+(`&mut self` receiver). The `option` example also exercises a generic method
+(`Option::and`) and `&self` receiver.
 
 ## Notes
 
@@ -138,6 +140,16 @@ ratio (struct), divmod (tuple), sum (for loop), geometry, closure, min
   first argument(s). Detection requires the call argument to be a
   `Variable`/`Parameter` ident (so SCIP `type_at` works) and references
   in param types are not yet peeled.
+* Reference types: `&T` translates to `*const T` and `&mut T` to `*T`
+  (non-slice; `&[T]` keeps its slice translation to `[]const T`).
+  Receivers follow the same rule: `&self` -> `self: *const Self`,
+  `&mut self` -> `self: *Self`, and `self` -> `self: Self`. At call
+  sites `&x` / `&mut x` both emit Zig `&x`; Zig auto-takes the address
+  for method calls on addressable values.
+* Match deref insertion: when the matched expression is an ident whose
+  SCIP type is a reference and no arm uses a reference pattern,
+  `translate_match` appends `.*`. (e.g. `match self` on `&self` becomes
+  `switch (self.*)`).
 * Zig keyword identifiers: `escape_zig` (in `src/translate/name.rs`)
   wraps reserved words like `and`, `or`, `var` in `@"..."` so e.g.
   `Option::and` translates to `fn @"and"(...)` and call sites become
@@ -154,6 +166,13 @@ ratio (struct), divmod (tuple), sum (for loop), geometry, closure, min
   strings. Currently hacked with sed, see `test.sh`.
 * For loops over iterators (other than ranges and `&[T]` slices) are
   TODO.
+* Match binding modes through a reference: in Rust,
+  `match r { Some(x) => ... }` with `r: &Option<T>` uses default binding
+  modes — `x` binds as `&T`. After deref insertion the Zig `switch`
+  captures by value (`T`), so the capture's type silently changes.
+  Harmless for current examples (all non-`_` captures match by-value
+  scrutinees), but needs handling once an example reads a non-`_`
+  capture through `&self` or `&T`.
 * Closure param shadowing: a closure param with the same name as an
   outer local (e.g. `let x = 3; let f = |x| x * 2;`) compiles in Rust
   but the emitted Zig fails with "function parameter 'x' shadows local

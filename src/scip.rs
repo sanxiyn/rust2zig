@@ -72,7 +72,7 @@ impl Scip {
     pub fn type_at(&self, range: &Range) -> Option<syn::Type> {
         let symbol = self.symbol_at(range)?;
         let info = self.symbol_info(symbol)?;
-        if !matches!(info.kind, Kind::Variable | Kind::Parameter) {
+        if !matches!(info.kind, Kind::Variable | Kind::Parameter | Kind::SelfParameter) {
             return None;
         }
         let sig = info.signature.as_deref()?;

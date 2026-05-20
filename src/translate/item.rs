@@ -166,12 +166,20 @@ impl Rust2Zig {
             .unwrap_or_default();
         let mut first = true;
         for arg in method.sig.inputs.iter() {
-            if let syn::FnArg::Receiver(_) = arg {
+            if let syn::FnArg::Receiver(receiver) = arg {
                 if !first {
                     write!(self.out, ", ").unwrap();
                 }
                 first = false;
-                write!(self.out, "self: Self").unwrap();
+                if receiver.reference.is_some() {
+                    if receiver.mutability.is_some() {
+                        write!(self.out, "self: *Self").unwrap();
+                    } else {
+                        write!(self.out, "self: *const Self").unwrap();
+                    }
+                } else {
+                    write!(self.out, "self: Self").unwrap();
+                }
             }
         }
         for tp in &type_params {

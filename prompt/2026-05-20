@@ -1,0 +1,22 @@
+First, read README.md.
+Let's implement reference. A new example, inc, defines fn inc(x: &mut i32). A test tests it with let mut x = 2; inc(&mut x); etc.
+Shouldn't Rust &T translate to *const T?
+In inc, let's define fn succ(x: &i32) -> i32. let y = x, and after inc(x) x equals succ(y).
+Flip the argument order of assert_eq. Expected should come first.
+I fixed zig install, so you can run zig tests.
+Am I correct that currently all matches in our examples bind by value?
+Let's add an example geometry2, with Point and translate but translate taking &mut self.
+Use receiver not recv, no unnecessary abbreviations.
+There were some problems. Try again.
+I am unsure what the problem was, but your edit wasn't applied. Edit looked correct to me.
+Shouldn't &self also translate differently? Maybe self: *const Self?
+How can we figure out when dereferences are needed?
+Where do we do that for let bindings?
+That doesn't look like deref insertion to me.
+Let's implement deref insertion for match. Does this design look reasonable? For match x { pat => ... }, if type of x is reference but pat is not reference pattern, x is dereferenced.
+Let's implement deref insertion for match and change &self translation.
+How do you think things are going so far?
+Update README as needed to reflect the current status. Note binding mode issue in Bugs section.
+Update memory as needed to reflect the current status.
+/insights
+/exit

@@ -53,7 +53,11 @@ impl Rust2Zig {
                 if let syn::Type::Slice(ts) = &*tr.elem {
                     write!(self.out, "[]const ").unwrap();
                     self.translate_type(&ts.elem);
+                } else if tr.mutability.is_some() {
+                    write!(self.out, "*").unwrap();
+                    self.translate_type(&tr.elem);
                 } else {
+                    write!(self.out, "*const ").unwrap();
                     self.translate_type(&tr.elem);
                 }
             }
