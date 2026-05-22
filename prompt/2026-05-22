@@ -1,0 +1,22 @@
+First, read README.md.
+Currently, receiver translation is done in translate_method. Shouldn't it be done in translate_fn_arg?
+Do it.
+Receiver arm should come before Typed arm.
+I find your memory update perplexing. Receiver before Typed is alphabetical, since R comes before T?
+Is the existing rule ineffective? Why do you think you made a mistake?
+I think iter example should be generic, i.e. T: PartialEq instead of i32.
+Can we make l a slice rather than an array to simplify things?
+Do it.
+We need to handle shadowing somehow. Design a solution.
+Check what the rule is for Zig.
+Looks good. Implement the design. Rename the second occurence to v2, not v_2. Put the pass in collect_renames, and analyze should call it.
+Wasn't the plan to use syn::visit?
+What are you doing?
+Update closure example too. (Read prompt/2026-05-06-2 for context.)
+That reminds me: currently, generic_fns and renames are keyed by SCIP symbol, but enums and structs are not. It could be problematic in the future. Fix it.
+How do you think things are going so far?
+Is README up to date?
+That doesn't feel like an improvement. We already discuss the renamer elsewhere.
+Update memory as needed to reflect the current status.
+/insights
+/exit

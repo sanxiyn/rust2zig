@@ -21,7 +21,7 @@ impl Rust2Zig {
                 write!(self.out, "/* TODO: for */").unwrap();
                 return;
             };
-            let name = pi.ident.to_string();
+            let name = self.rename_ident(&pi.ident);
             let ty = self.scip.type_at(&pi.ident.span().into());
             let mut ty_str = String::new();
             if let Some(ty) = &ty {

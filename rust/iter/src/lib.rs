@@ -1,4 +1,4 @@
-pub fn position(l: &[i32], v: i32) -> Option<usize> {
+pub fn position<T: PartialEq>(l: &[T], v: T) -> Option<usize> {
     let mut i = 0;
     for e in l {
         if *e == v {
@@ -15,7 +15,9 @@ pub fn position(l: &[i32], v: i32) -> Option<usize> {
 
 #[test]
 fn test_position() {
-    let l = [1, 2, 3, 4, 5];
-    assert_eq!(Some(2), position(&l, 3));
-    assert_eq!(None, position(&l, 6));
+    let l: &[i32] = &[1, 2, 3, 4, 5];
+    let v = 3;
+    assert_eq!(Some(2), position(l, v));
+    let v = 6;
+    assert_eq!(None, position(l, v));
 }

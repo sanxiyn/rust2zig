@@ -37,15 +37,15 @@ translated. Generated Zig should be suitable for human consumption.
 ### Analysis pass
 
 Pre-translation pass (`analyze`) collects metadata from the AST into three
-maps: `HashMap<String, Enum>`, `HashMap<String, Struct>`, and
+maps: `HashMap<String, Struct>`, `HashMap<String, Enum>`, and
 `HashMap<String, GenericFn>` (keyed by SCIP symbol).
+
+`Struct` has:
+* `impls: Vec<syn::ItemImpl>`: collected impl blocks
 
 `Enum` has:
 * `has_data: bool`: whether any variant has fields
 * `is_generic: bool`: whether the enum has type parameters
-* `impls: Vec<syn::ItemImpl>`: collected impl blocks
-
-`Struct` has:
 * `impls: Vec<syn::ItemImpl>`: collected impl blocks
 
 `GenericFn` has:
@@ -56,11 +56,21 @@ maps: `HashMap<String, Enum>`, `HashMap<String, Struct>`, and
   `path` (a sequence of generic argument positions). Bare `T` is `path: []`,
   `Option<T>` is `path: [0]`, `HashMap<K, T>` is `path: [1]`.
 
-The analysis pass runs in two phases: first collects enum and struct decls
-(and registers free generic fns), then attaches each impl block to its
-enclosing enum/struct (and registers generic methods inside impls).
-`register_generic_fn` skips a fn entirely if any type param can't be
+The analysis pass runs in two phases: first collects structs and enums
+(and registers generic functions), then attaches each impl block to its
+enclosing struct/enum (and registers generic methods inside impls).
+`register_generic` skips a function entirely if any type param can't be
 located in some param's type via `find_type_param`.
+
+After the two analysis phases, `collect_renames` walks every body with
+`syn::visit`, maintaining a per-scope stack of bound names. On each
+binding (let, function/closure param, match), if the desired name is
+already bound in any enclosing scope, it picks `name2`, `name3`, ... and
+records SCIP symbol -> name in `renames: HashMap<String, String>`.
+Scopes are pushed on entering a body, block, closure, or match arm.
+Use sites route through `rename_ident`. This handles Rust's shadowing in Zig
+(which rejects shadowing across all nested scopes; but siblings are
+independent).
 
 ### SCIP integration
 
@@ -173,8 +183,3 @@ ratio (struct), divmod (tuple), sum (for loop), geometry, closure, min
   Harmless for current examples (all non-`_` captures match by-value
   scrutinees), but needs handling once an example reads a non-`_`
   capture through `&self` or `&T`.
-* Closure param shadowing: a closure param with the same name as an
-  outer local (e.g. `let x = 3; let f = |x| x * 2;`) compiles in Rust
-  but the emitted Zig fails with "function parameter 'x' shadows local
-  constant from outer scope", since Zig doesn't allow shadowing across
-  the struct-wrapped fn boundary. Needs a renaming strategy.

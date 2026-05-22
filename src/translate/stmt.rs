@@ -61,7 +61,7 @@ impl Rust2Zig {
                         }
                     }
                     let keyword = if pi.mutability.is_some() { "var" } else { "const" };
-                    write!(self.out, "{}{} {}", pad, keyword, pi.ident).unwrap();
+                    write!(self.out, "{}{} {}", pad, keyword, self.rename_ident(&pi.ident)).unwrap();
                     if let Some(ty) = self.scip.type_at(&pi.ident.span().into()) {
                         write!(self.out, ": ").unwrap();
                         self.translate_type(&ty);
@@ -97,16 +97,17 @@ impl Rust2Zig {
 
     fn translate_closure_local(&mut self, pi: &syn::PatIdent, ec: &syn::ExprClosure) {
         let pad = self.pad();
+        let local_name = self.rename_ident(&pi.ident);
         if self.has_capture(ec) {
             writeln!(
                 self.out,
                 "{}const {} = /* TODO: closure */;",
-                pad, pi.ident
+                pad, local_name
             )
             .unwrap();
             return;
         }
-        writeln!(self.out, "{}const {} = struct {{", pad, pi.ident).unwrap();
+        writeln!(self.out, "{}const {} = struct {{", pad, local_name).unwrap();
         self.indent();
         write!(self.out, "{}fn call(", self.pad()).unwrap();
         for (i, input) in ec.inputs.iter().enumerate() {
@@ -114,7 +115,7 @@ impl Rust2Zig {
                 write!(self.out, ", ").unwrap();
             }
             if let syn::Pat::Ident(pi) = input {
-                write!(self.out, "{}", pi.ident).unwrap();
+                write!(self.out, "{}", self.rename_ident(&pi.ident)).unwrap();
                 if let Some(ty) = self.scip.type_at(&pi.ident.span().into()) {
                     write!(self.out, ": ").unwrap();
                     self.translate_type(&ty);

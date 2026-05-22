@@ -1,6 +1,6 @@
 const std = @import("std");
 
-fn position(l: []const i32, v: i32) ?usize {
+fn position(comptime T: type, l: []const T, v: T) ?usize {
     var i: usize = 0;
     for (l) |*e| {
         if (e.* == v) {
@@ -16,8 +16,10 @@ fn position(l: []const i32, v: i32) ?usize {
 }
 
 test "position" {
-    const l: [5]i32 = .{ 1, 2, 3, 4, 5 };
-    try std.testing.expectEqual(2, position(&l, 3));
-    try std.testing.expectEqual(null, position(&l, 6));
+    const l: []const i32 = &.{ 1, 2, 3, 4, 5 };
+    const v: i32 = 3;
+    try std.testing.expectEqual(2, position(i32, l, v));
+    const v2: i32 = 6;
+    try std.testing.expectEqual(null, position(i32, l, v2));
 }
 

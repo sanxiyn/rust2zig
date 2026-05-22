@@ -7,7 +7,7 @@ impl Rust2Zig {
     pub fn translate_pat(&mut self, pat: &syn::Pat) {
         match pat {
             syn::Pat::Ident(pi) => {
-                write!(self.out, "{}", pi.ident).unwrap();
+                write!(self.out, "{}", self.rename_ident(&pi.ident)).unwrap();
             }
             syn::Pat::Type(pt) => {
                 self.translate_pat(&pt.pat);
@@ -26,7 +26,7 @@ impl Rust2Zig {
     pub fn translate_match_pat(&mut self, pat: &syn::Pat) -> Vec<(String, String)> {
         match pat {
             syn::Pat::Ident(pi) => {
-                write!(self.out, "{}", pi.ident).unwrap();
+                write!(self.out, "{}", self.rename_ident(&pi.ident)).unwrap();
                 Default::default()
             }
             syn::Pat::Path(pp) => {
@@ -40,7 +40,7 @@ impl Rust2Zig {
                 for field in &ps.fields {
                     if let syn::Member::Named(ident) = &field.member {
                         if let syn::Pat::Ident(pi) = &*field.pat {
-                            captures.push((pi.ident.to_string(), format!(".{}", ident)));
+                            captures.push((self.rename_ident(&pi.ident), format!(".{}", ident)));
                         }
                     }
                 }
@@ -52,7 +52,7 @@ impl Rust2Zig {
                 let mut captures: Vec<(String, String)> = Default::default();
                 for (i, elem) in pts.elems.iter().enumerate() {
                     if let syn::Pat::Ident(pi) = elem {
-                        captures.push((pi.ident.to_string(), format!("[{}]", i)));
+                        captures.push((self.rename_ident(&pi.ident), format!("[{}]", i)));
                     }
                 }
                 captures

@@ -16,7 +16,8 @@ impl Rust2Zig {
 
     fn translate_enum(&mut self, e: &syn::ItemEnum) {
         let name = e.ident.to_string();
-        let enum_ = &self.enums[&name];
+        let symbol = self.scip.symbol_at(&e.ident.span().into()).unwrap().to_string();
+        let enum_ = &self.enums[&symbol];
         let has_data = enum_.has_data;
         let is_generic = enum_.is_generic;
         let impls = enum_.impls.clone();
@@ -123,7 +124,8 @@ impl Rust2Zig {
 
     fn translate_struct(&mut self, s: &syn::ItemStruct) {
         let name = s.ident.to_string();
-        let impls = self.structs[&name].impls.clone();
+        let symbol = self.scip.symbol_at(&s.ident.span().into()).unwrap().to_string();
+        let impls = self.structs[&symbol].impls.clone();
 
         writeln!(self.out, "const {} = struct {{", name).unwrap();
         self.indent();
@@ -166,20 +168,12 @@ impl Rust2Zig {
             .unwrap_or_default();
         let mut first = true;
         for arg in method.sig.inputs.iter() {
-            if let syn::FnArg::Receiver(receiver) = arg {
+            if let syn::FnArg::Receiver(_) = arg {
                 if !first {
                     write!(self.out, ", ").unwrap();
                 }
                 first = false;
-                if receiver.reference.is_some() {
-                    if receiver.mutability.is_some() {
-                        write!(self.out, "self: *Self").unwrap();
-                    } else {
-                        write!(self.out, "self: *const Self").unwrap();
-                    }
-                } else {
-                    write!(self.out, "self: Self").unwrap();
-                }
+                self.translate_fn_arg(arg, &[]);
             }
         }
         for tp in &type_params {
@@ -190,14 +184,12 @@ impl Rust2Zig {
             write!(self.out, "comptime {}: type", tp).unwrap();
         }
         for arg in method.sig.inputs.iter() {
-            if let syn::FnArg::Typed(pat_type) = arg {
+            if let syn::FnArg::Typed(_) = arg {
                 if !first {
                     write!(self.out, ", ").unwrap();
                 }
                 first = false;
-                self.translate_pat(&pat_type.pat);
-                write!(self.out, ": ").unwrap();
-                self.translate_type(&pat_type.ty);
+                self.translate_fn_arg(arg, &[]);
             }
         }
         write!(self.out, ") ").unwrap();
@@ -226,7 +218,7 @@ impl Rust2Zig {
             if let syn::FnArg::Typed(pat_type) = arg {
                 if let syn::Pat::Ident(pi) = &*pat_type.pat {
                     if pi.mutability.is_some() {
-                        mut_params.push(pi.ident.to_string());
+                        mut_params.push(self.rename_ident(&pi.ident));
                     }
                 }
             }
@@ -268,9 +260,20 @@ impl Rust2Zig {
 
     fn translate_fn_arg(&mut self, arg: &syn::FnArg, mut_params: &[String]) {
         match arg {
+            syn::FnArg::Receiver(receiver) => {
+                if receiver.reference.is_some() {
+                    if receiver.mutability.is_some() {
+                        write!(self.out, "self: *Self").unwrap();
+                    } else {
+                        write!(self.out, "self: *const Self").unwrap();
+                    }
+                } else {
+                    write!(self.out, "self: Self").unwrap();
+                }
+            }
             syn::FnArg::Typed(pat_type) => {
                 if let syn::Pat::Ident(pi) = &*pat_type.pat {
-                    let name = pi.ident.to_string();
+                    let name = self.rename_ident(&pi.ident);
                     if mut_params.contains(&name) {
                         write!(self.out, "_{}", name).unwrap();
                     } else {
@@ -280,7 +283,6 @@ impl Rust2Zig {
                 write!(self.out, ": ").unwrap();
                 self.translate_type(&pat_type.ty);
             }
-            _ => write!(self.out, "/* TODO: self */").unwrap(),
         }
     }
 }
