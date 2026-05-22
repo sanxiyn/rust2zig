@@ -11,6 +11,14 @@ impl Rust2Zig {
         write!(self.out, "break").unwrap();
     }
 
+    pub fn translate_continue(&mut self, ec: &syn::ExprContinue) {
+        if ec.label.is_some() {
+            write!(self.out, "/* TODO: continue */").unwrap();
+            return;
+        }
+        write!(self.out, "continue").unwrap();
+    }
+
     pub fn translate_for_loop(&mut self, efl: &syn::ExprForLoop) {
         if let syn::Expr::Range(er) = &*efl.expr {
             let (Some(start), Some(end)) = (&er.start, &er.end) else {

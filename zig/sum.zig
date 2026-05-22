@@ -8,6 +8,17 @@ fn sum(xs: []const i32) i32 {
     return total;
 }
 
+fn sumOdd(xs: []const i32) i32 {
+    var total: i32 = 0;
+    for (xs) |*x| {
+        if (@rem(x.*, 2) == 0) {
+            continue;
+        }
+        total += x.*;
+    }
+    return total;
+}
+
 test "sum" {
     const xs: [5]i32 = .{ 1, 2, 3, 4, 5 };
     var total: i32 = 0;
@@ -22,5 +33,10 @@ test "sum" {
         total += x;
     }
     try std.testing.expectEqual(15, total);
+}
+
+test "sum_odd" {
+    const xs: [5]i32 = .{ 1, 2, 3, 4, 5 };
+    try std.testing.expectEqual(9, sumOdd(&xs));
 }
 

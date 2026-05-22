@@ -79,6 +79,29 @@ impl Scip {
         let (_, ty) = sig.split_once(": ")?;
         syn::parse_str(ty).ok()
     }
+
+    pub fn binary_type_at(&self, range: &Range) -> Option<(syn::Type, syn::Type)> {
+        let symbol = self.symbol_at(range)?;
+        let idx = symbol.find("/arith/impl#[")?;
+        let rest = &symbol[idx + "/arith/impl#[".len()..];
+        let (left_str, rest) = if let Some(rest) = rest.strip_prefix('`') {
+            let end = rest.find('`')?;
+            (&rest[..end], &rest[end + 1..])
+        } else {
+            let end = rest.find(']')?;
+            (&rest[..end], &rest[end..])
+        };
+        let rest = rest.strip_prefix("][`")?;
+        let end = rest.find("`]")?;
+        let trait_part = &rest[..end];
+        let lt = trait_part.find('<')?;
+        let gt = trait_part.rfind('>')?;
+        let right_str = &trait_part[lt + 1..gt];
+        let right_str = if right_str == "Self" { left_str } else { right_str };
+        let left_ty: syn::Type = syn::parse_str(left_str).ok()?;
+        let right_ty: syn::Type = syn::parse_str(right_str).ok()?;
+        Some((left_ty, right_ty))
+    }
 }
 
 fn decode_range(range: &[i32]) -> Option<Range> {

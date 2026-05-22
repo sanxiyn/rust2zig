@@ -1,0 +1,16 @@
+First, read README.md.
+Let's refactor. Split generic-related codes (GenericArgRef, GenericFn, find_type_param, peel_type, register_generic, etc.) to generic.rs.
+Next, split codes related to shadowing renamer to rename.rs.
+Add sum_odd to sum example, skipping even numbers using continue. Also test_sum_odd. For [1, 2, 3, 4, 5] we'd expect 9.
+What is the problem?
+Why didn't we encounter this so far? Because all % were on unsigned?
+Let's fix it to emit rem for signed cases.
+We should avoid implementing expr_type if possible since it amounts to writing a substantial part of Rust type inference in the general case. Can this be handled like how we handled .len()? (Read prompt/2026-05-13 for context.)
+Can we use this to handle deref insertion for binary operators? When Rust can add T and U, it can also add &T and U, T and &U, and &T and &U, but that doesn't work for Zig. Idiomatically, sum example would write total += x and x % 2 == 0, not total += *x and *x % 2 == 0.
+Yes, check what we get from SCIP.
+I think it should go to scip.rs. Name it binary_type_at, taking Range. Return (Type, Type). We just need to check whether it is a reference for now, but we'd want to handle operator overloading in the future.
+test.sh and test_test.sh can run a subset, but build_index.sh can't. Fix it.
+Update README as needed to reflect the current status.
+I don't think that's necessary.
+/insights
+/exit

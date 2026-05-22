@@ -1,6 +1,7 @@
 use std::fmt::Write;
 
-use super::{PathMode, Rust2Zig, peel_type};
+use super::{PathMode, Rust2Zig};
+use super::generic::peel_type;
 use super::name::{camel_to_snake, escape_zig, snake_to_camel};
 
 impl Rust2Zig {

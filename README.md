@@ -21,15 +21,20 @@ translated. Generated Zig should be suitable for human consumption.
   (path, check_moniker, path_mode)
 * `src/translate/call.rs`: function and method call translation
 * `src/translate/expr.rs`: expression translation
-* `src/translate/flow.rs`: control flow translation (for, if, while)
+* `src/translate/flow.rs`: control flow translation (for, if, while, break, continue)
+* `src/translate/generic.rs`: generic function analysis (`GenericArgRef`,
+  `GenericFn`, `find_type_param`, `peel_type`, `register_generic`)
 * `src/translate/item.rs`: item translation (enum, struct, method, fn)
 * `src/translate/mac.rs`: macro translation (`assert_eq!`, `panic!`, `println!`)
 * `src/translate/name.rs`: name conversion (camel/snake case, keyword escaping)
 * `src/translate/pat.rs`: pattern translation
+* `src/translate/rename.rs`: shadowing renamer (`collect_renames`, `rename_ident`)
 * `src/translate/stmt.rs`: statement and block translation
 * `src/translate/ty.rs`: type translation
 * `build.rs`: compiles `proto/scip.proto` via `prost-build`
-* `build_index.sh`: regenerates `<name>.lsif` and `index.scip` for every example
+* `build_index.sh`: regenerates `<name>.lsif` and `index.scip`. Accepts
+  optional name arguments (e.g. `./build_index.sh sum`) to rebuild a
+  subset; with no arguments, all examples rebuild.
 * `coverage.sh`: runs `test.sh` under `cargo-llvm-cov`, excluding the
   prost-generated `target/.../out/scip.rs` from the report. Output goes to
   `coverage/text/`; current findings are summarized in `coverage.md`.
@@ -83,6 +88,12 @@ rust-analyzer SCIP dumps provide semantic information.
   `Kind::SelfParameter` symbols, parses the suffix after `: ` in
   `signature_documentation.text` (e.g. `let xs: [i32; 5]`, `xs: &[i32]`,
   `self: &Option<T>`) as `syn::Type`
+* `Scip::binary_type_at(range)`: at a binary operator's span,
+  rust-analyzer records the dispatched trait impl (e.g.
+  `ops/arith/impl#[i32][`AddAssign<&i32>`]add_assign().`). This parses
+  out the impl type and the trait's type argument and returns them as
+  `(left, right): (syn::Type, syn::Type)`, resolving `Self` to the impl
+  type
 * `SymbolInfo::range`: the definition occurrence's range (set from the
   occurrence carrying `SymbolRole::Definition`). Used by `has_capture`
   to tell outer locals from closure-introduced bindings.
@@ -119,13 +130,23 @@ ratio (struct), divmod (tuple), sum (for loop), geometry, closure, min
 * For loops translate when the iterable is an array, an `&[T]` slice,
   or a range. Arrays iterate by value (`for (xs) |x|`) matching Rust's
   `for x in [T; N]`. Slices iterate by reference (`for (xs) |*x|`)
-  matching Rust's `for x in &[T]` yielding `&T`; uses of `x` need `.*`
-  in Zig, which `translate_unary` produces from Rust's `*x`. Closed
-  Rust ranges (`a..=b`) become `a..(b+1)` in Zig; the capture is
-  `usize`, so the body is wrapped with a preamble
+  matching Rust's `for x in &[T]` yielding `&T`; uses of `x` in Zig
+  need `.*`, inserted either by `translate_unary` from Rust's `*x` or
+  by `translate_binary`'s reference detection (see below). Closed Rust
+  ranges (`a..=b`) become `a..(b+1)` in Zig; the capture is `usize`,
+  so the body is wrapped with a preamble
   `const x: T = @intCast(_x);` using `Scip::type_at` on the loop var.
 * `break` (without label or value) translates verbatim. Labels and
   break-with-value are TODO and only relevant once `loop` lands.
+* `continue` (without label) translates verbatim.
+* `translate_binary` queries `Scip::binary_type_at` for the dispatched
+  operand types. Each operand whose type is `&T` is followed by `.*` in
+  Zig, so idiomatic Rust like `total += x` / `x % 2 == 0` (where
+  `x: &i32`) translates to `total += x.*` / `x.* % 2 == 0` without an
+  explicit `*x` in source. Additionally, when the (peeled) left operand
+  of `%` is a signed integer, the operator is rewritten as
+  `@rem(left, right)` since Zig rejects `%` on signed runtime ints.
+  `peel_ref` and `is_signed_int` are local helpers in `expr.rs`.
 * Slice `.len()` is special-cased in `translate_method_call`: detected
   via `check_moniker_ident(method, "core::slice::len")` and emitted as
   the Zig `.len` field access.

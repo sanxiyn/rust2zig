@@ -11,6 +11,7 @@ impl Rust2Zig {
             syn::Expr::Binary(eb) => self.translate_binary(eb),
             syn::Expr::Break(eb) => self.translate_break(eb),
             syn::Expr::Call(ec) => self.translate_call(ec),
+            syn::Expr::Continue(ec) => self.translate_continue(ec),
             syn::Expr::Field(ef) => self.translate_field(ef),
             syn::Expr::ForLoop(efl) => self.translate_for_loop(efl),
             syn::Expr::If(ei) => self.translate_if(ei),
@@ -66,10 +67,37 @@ impl Rust2Zig {
     }
 
     fn translate_binary(&mut self, eb: &syn::ExprBinary) {
-        self.translate_expr(&eb.left);
+        use syn::spanned::Spanned;
+        let types = self.scip.binary_type_at(&eb.op.span().into());
+        let (left_ref, right_ref) = match &types {
+            Some((l, r)) => (matches!(l, syn::Type::Reference(_)), matches!(r, syn::Type::Reference(_))),
+            None => (false, false),
+        };
+        if matches!(eb.op, syn::BinOp::Rem(_)) {
+            let signed = match &types {
+                Some((l, _)) => is_signed_int(peel_ref(l)),
+                None => false,
+            };
+            if signed {
+                write!(self.out, "@rem(").unwrap();
+                self.translate_operand(&eb.left, left_ref);
+                write!(self.out, ", ").unwrap();
+                self.translate_operand(&eb.right, right_ref);
+                write!(self.out, ")").unwrap();
+                return;
+            }
+        }
+        self.translate_operand(&eb.left, left_ref);
         let op = self.translate_binop(&eb.op);
         write!(self.out, " {} ", op).unwrap();
-        self.translate_expr(&eb.right);
+        self.translate_operand(&eb.right, right_ref);
+    }
+
+    fn translate_operand(&mut self, expr: &syn::Expr, deref: bool) {
+        self.translate_expr(expr);
+        if deref {
+            write!(self.out, ".*").unwrap();
+        }
     }
 
     fn translate_binop(&mut self, op: &syn::BinOp) -> &'static str {
@@ -230,4 +258,17 @@ impl Rust2Zig {
             }
         }
     }
+}
+
+fn peel_ref(ty: &syn::Type) -> &syn::Type {
+    match ty {
+        syn::Type::Reference(tr) => &tr.elem,
+        _ => ty,
+    }
+}
+
+fn is_signed_int(ty: &syn::Type) -> bool {
+    let syn::Type::Path(tp) = ty else { return false };
+    let Some(seg) = tp.path.segments.last() else { return false };
+    matches!(seg.ident.to_string().as_str(), "i8" | "i16" | "i32" | "i64" | "i128" | "isize")
 }
