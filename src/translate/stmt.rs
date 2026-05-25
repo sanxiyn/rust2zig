@@ -98,22 +98,22 @@ impl Rust2Zig {
     fn translate_closure_local(&mut self, pi: &syn::PatIdent, ec: &syn::ExprClosure) {
         let pad = self.pad();
         let local_name = self.rename_ident(&pi.ident);
-        if self.has_capture(ec) {
-            writeln!(
-                self.out,
-                "{}const {} = /* TODO: closure */;",
-                pad, local_name
-            )
-            .unwrap();
-            return;
-        }
+        let captures = self.collect_captures(ec);
         writeln!(self.out, "{}const {} = struct {{", pad, local_name).unwrap();
         self.indent();
-        write!(self.out, "{}fn call(", self.pad()).unwrap();
-        for (i, input) in ec.inputs.iter().enumerate() {
-            if i > 0 {
-                write!(self.out, ", ").unwrap();
-            }
+        let mut capture_fields: Vec<String> = Vec::new();
+        for (ident, ty) in &captures {
+            let field = self.rename_ident(ident);
+            let pad = self.pad();
+            write!(self.out, "{}{}: ", pad, field).unwrap();
+            self.translate_type(ty);
+            writeln!(self.out, ",").unwrap();
+            capture_fields.push(field);
+        }
+        let self_name = if captures.is_empty() { "_" } else { "self" };
+        write!(self.out, "{}fn call({}: @This()", self.pad(), self_name).unwrap();
+        for input in ec.inputs.iter() {
+            write!(self.out, ", ").unwrap();
             if let syn::Pat::Ident(pi) = input {
                 write!(self.out, "{}", self.rename_ident(&pi.ident)).unwrap();
                 if let Some(ty) = self.scip.type_at(&pi.ident.span().into()) {
@@ -131,6 +131,13 @@ impl Rust2Zig {
             write!(self.out, "void").unwrap();
         }
         write!(self.out, " ").unwrap();
+        let mut map: std::collections::HashMap<String, String> = Default::default();
+        for ((ident, _), field) in captures.iter().zip(capture_fields.iter()) {
+            if let Some(symbol) = self.scip.symbol_at(&ident.span().into()) {
+                map.insert(symbol.to_string(), field.clone());
+            }
+        }
+        self.capture_stack.push(map);
         if let syn::Expr::Block(eb) = &*ec.body {
             self.translate_block(&eb.block);
             writeln!(self.out).unwrap();
@@ -143,8 +150,20 @@ impl Rust2Zig {
             self.dedent();
             writeln!(self.out, "{}}}", self.pad()).unwrap();
         }
+        self.capture_stack.pop();
         self.dedent();
-        writeln!(self.out, "{}}}.call;", pad).unwrap();
+        if capture_fields.is_empty() {
+            writeln!(self.out, "{}}}{{}};", pad).unwrap();
+        } else {
+            write!(self.out, "{}}}{{ ", pad).unwrap();
+            for (i, field) in capture_fields.iter().enumerate() {
+                if i > 0 {
+                    write!(self.out, ", ").unwrap();
+                }
+                write!(self.out, ".{} = {}", field, field).unwrap();
+            }
+            writeln!(self.out, " }};").unwrap();
+        }
     }
 
     pub fn translate_block(&mut self, block: &syn::Block) {

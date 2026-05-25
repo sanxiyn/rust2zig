@@ -95,8 +95,9 @@ rust-analyzer SCIP dumps provide semantic information.
   `(left, right): (syn::Type, syn::Type)`, resolving `Self` to the impl
   type
 * `SymbolInfo::range`: the definition occurrence's range (set from the
-  occurrence carrying `SymbolRole::Definition`). Used by `has_capture`
-  to tell outer locals from closure-introduced bindings.
+  occurrence carrying `SymbolRole::Definition`). Used by
+  `collect_captures` to tell outer locals from closure-introduced
+  bindings.
 * `check_moniker(path, expected)`: maps logical Rust paths
   (`core::option::Option::Some`, `std::macros::println`, ...) to SCIP
   descriptor suffixes and suffix-matches against the occurrence's symbol
@@ -153,13 +154,23 @@ ratio (struct), divmod (tuple), sum (for loop), geometry, closure, min
 * Block emission goes through `translate_block_with_preamble`, which
   takes pre-built lines inserted before the body — used by mutable-arg
   shadowing (`var a = _a;`) and range-loop intCast.
-* Non-capturing closures (`let f = |x| x * 2;`) translate to a local
-  struct-wrapped fn: `const f = struct { fn call(x: T) R { ... } }.call;`.
-  Param types come from `Scip::type_at` on each param ident; the return
+* Closures (`let f = |x| x * 2;`) translate uniformly to a struct
+  value with a `call(self: @This(), ...) R` method, instantiated as
+  `}{}` (no captures) or `}{ .a = a, ... }` (with captures). Param
+  types come from `Scip::type_at` on each param ident; the return
   type is parsed out of the binding's `impl Fn(..) -> R` signature via
-  `closure_return_type`. `has_capture` (a `syn::visit` walk that compares
-  each ident's SCIP definition range against the closure span) gates the
-  translation — capturing closures fall back to a TODO.
+  `closure_return_type`. `collect_captures` walks the body and returns
+  the unique idents whose SCIP definition lies outside the closure
+  span, with their types; the resulting fields become the struct's
+  state. Inside the body, capture references rewrite to `self.<field>`
+  via `capture_stack` (checked in `translate_path`); when there are
+  no captures, the self param is emitted as `_: @This()` to satisfy
+  Zig's unused-param rule. At call sites, `translate_call` queries the
+  callee ident's `Scip::type_at`; when `is_closure_type` recognizes it
+  (an `impl Fn`/`FnMut`/`FnOnce` bound) a `.call` suffix is appended.
+  This is type-driven, so closure-typed *parameters* route the same way
+  as local closure bindings. Mutating (`FnMut`) and moving (`move`)
+  closures are not yet handled.
 * Generic functions/methods: each declared type param is emitted as
   `comptime T: type`. For functions, comptime params come first; for
   methods they come after `self: Self` so the call site
@@ -179,8 +190,13 @@ ratio (struct), divmod (tuple), sum (for loop), geometry, closure, min
   for method calls on addressable values.
 * Match deref insertion: when the matched expression is an ident whose
   SCIP type is a reference and no arm uses a reference pattern,
-  `translate_match` appends `.*`. (e.g. `match self` on `&self` becomes
-  `switch (self.*)`).
+  `translate_match` appends `.*` (e.g. `match self` on `&self` becomes
+  `switch (self.*)`) and `translate_match_arms` captures arm payloads
+  by pointer (`|*p|`, `|*_line|`) with field bindings taking addresses
+  (`const center = &_circle.center;`). This makes each Zig capture's
+  type correspond to the Rust binding-mode-derived type (`*const T`
+  matches Rust's `&T`), so `.*` insertion via `binary_type_at` works
+  uniformly inside arms.
 * Zig keyword identifiers: `escape_zig` (in `src/translate/name.rs`)
   wraps reserved words like `and`, `or`, `var` in `@"..."` so e.g.
   `Option::and` translates to `fn @"and"(...)` and call sites become
@@ -197,10 +213,7 @@ ratio (struct), divmod (tuple), sum (for loop), geometry, closure, min
   strings. Currently hacked with sed, see `test.sh`.
 * For loops over iterators (other than ranges and `&[T]` slices) are
   TODO.
-* Match binding modes through a reference: in Rust,
-  `match r { Some(x) => ... }` with `r: &Option<T>` uses default binding
-  modes — `x` binds as `&T`. After deref insertion the Zig `switch`
-  captures by value (`T`), so the capture's type silently changes.
-  Harmless for current examples (all non-`_` captures match by-value
-  scrutinees), but needs handling once an example reads a non-`_`
-  capture through `&self` or `&T`.
+* `&mut T` match scrutinees: capture-by-pointer logic in
+  `translate_match_arms` always emits `*const` (via Zig's `|*x|` on a
+  deref'd const pointer). For `&mut` scrutinees the captures should be
+  `*T`, but no current example exercises this.

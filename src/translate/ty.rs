@@ -20,7 +20,9 @@ impl Rust2Zig {
                 let ident = &segment.ident;
                 let name = ident.to_string();
                 match name.as_str() {
-                    "bool" | "i8" | "i16" | "i32" | "i64" | "u8" | "u16" | "u32" | "u64" => {
+                    "bool"
+                    | "i8" | "i16" | "i32" | "i64" | "i128" | "isize"
+                    | "u8" | "u16" | "u32" | "u64" | "u128" | "usize" => {
                         write!(self.out, "{}", ident).unwrap();
                     }
                     "str" => write!(self.out, "[]const u8").unwrap(),

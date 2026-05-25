@@ -147,7 +147,7 @@ impl Rust2Zig {
             write!(self.out, ".*").unwrap();
         }
         write!(self.out, ") ").unwrap();
-        self.translate_match_arms(&em.arms);
+        self.translate_match_arms(&em.arms, deref);
     }
 
     fn match_needs_deref(&self, em: &syn::ExprMatch) -> bool {
@@ -160,9 +160,11 @@ impl Rust2Zig {
         matches!(ty, syn::Type::Reference(_))
     }
 
-    fn translate_match_arms(&mut self, arms: &[syn::Arm]) {
+    fn translate_match_arms(&mut self, arms: &[syn::Arm], capture_by_ref: bool) {
         writeln!(self.out, "{{").unwrap();
         self.indent();
+        let star = if capture_by_ref { "*" } else { "" };
+        let amp = if capture_by_ref { "&" } else { "" };
         for arm in arms {
             let pad = self.pad();
             write!(self.out, "{}", pad).unwrap();
@@ -181,11 +183,11 @@ impl Rust2Zig {
                 || captures.iter().any(|(_, acc)| acc.starts_with('.'));
             if use_block {
                 let payload = format!("_{}", variant.unwrap());
-                writeln!(self.out, "|{}| blk: {{", payload).unwrap();
+                writeln!(self.out, "|{}{}| blk: {{", star, payload).unwrap();
                 self.indent();
                 for (capture, accessor) in &captures {
                     let pad = self.pad();
-                    writeln!(self.out, "{}const {} = {}{};", pad, capture, payload, accessor).unwrap();
+                    writeln!(self.out, "{}const {} = {}{}{};", pad, capture, amp, payload, accessor).unwrap();
                 }
                 let pad = self.pad();
                 write!(self.out, "{}break :blk ", pad).unwrap();
@@ -195,7 +197,7 @@ impl Rust2Zig {
                 write!(self.out, "{}}}", self.pad()).unwrap();
             } else {
                 if let Some((capture, _)) = captures.first() {
-                    write!(self.out, "|{}| ", capture).unwrap();
+                    write!(self.out, "|{}{}| ", star, capture).unwrap();
                 }
                 self.translate_expr(&arm.body);
             }

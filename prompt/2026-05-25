@@ -1,0 +1,22 @@
+First, read README.md.
+ty.rs doesn't check for 128-bit types and address sized types. Fix it.
+Today I want to fix binding mode issue noted in Bugs section of README. To do that, copy Shape and bounding_box from geometry example to geometry2 example, but bounding_box taking &Shape.
+Now test it.
+How should it be fixed?
+That doesn't sound right. Ideally, we want all bindings in Rust and Zig to have corresponding types. Can't we make Zig captures by reference, if we can somehow detect Rust side is also by reference?
+Do it.
+Currently we only handle non-capturing closures. How should we handle capturing closures?
+Yes, let's start with Copy captures. Add test_capture to closure example: a = 3; add = |x| x + a; add(3) equals 6.
+Do we still need has_capture? Can we get rid of it?
+collect_captures returns a vector of (ident, symbol, type). Is symbol necessary? It only seems to be used for capture_stack. If so, it can be re-derived from ident.
+Can we always push and pop capture_stack without checking capturing? It'd be an empty map anyway.
+It would be cool if we can add Option::map to option example. How hard would it be?
+Write the plan to TODO.md.
+Change non-capturing closures to be called by f.call.
+Update TODO.
+/compact
+Can we get rid of closures state? We'd use SCIP type and write is_closure_type helper, which checks for Fn/FnMut/FnOnce.
+How do you think things are going so far?
+Update memory as needed to reflect the current status.
+/insights
+/exit

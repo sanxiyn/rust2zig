@@ -33,6 +33,14 @@ impl Rust2Zig {
             }
         }
         self.translate_expr(&ec.func);
+        if let syn::Expr::Path(ep) = &*ec.func {
+            let ident = &ep.path.segments.last().unwrap().ident;
+            if let Some(ty) = self.scip.type_at(&ident.span().into()) {
+                if self.is_closure_type(&ty) {
+                    write!(self.out, ".call").unwrap();
+                }
+            }
+        }
         write!(self.out, "(").unwrap();
         let mut first = true;
         if let syn::Expr::Path(ep) = &*ec.func {

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
 
 mod call;
@@ -39,6 +39,7 @@ pub struct Rust2Zig {
     pub enums: HashMap<String, Enum>,
     pub generic_fns: HashMap<String, GenericFn>,
     pub renames: HashMap<String, String>,
+    pub capture_stack: Vec<HashMap<String, String>>,
     pub scip: Scip,
     out: String,
     indent: usize,
@@ -51,6 +52,7 @@ impl Rust2Zig {
             enums: Default::default(),
             generic_fns: Default::default(),
             renames: Default::default(),
+            capture_stack: Default::default(),
             scip,
             out: Default::default(),
             indent: Default::default(),
@@ -135,21 +137,19 @@ impl Rust2Zig {
         self.collect_renames(file);
     }
 
-    pub fn has_capture(&self, ec: &syn::ExprClosure) -> bool {
+    pub fn collect_captures(&self, ec: &syn::ExprClosure) -> Vec<(syn::Ident, syn::Type)> {
         use syn::spanned::Spanned;
         use syn::visit::Visit;
 
         struct Visitor<'a> {
             scip: &'a Scip,
             span: Range,
-            found: bool,
+            seen: HashSet<String>,
+            captures: Vec<(syn::Ident, syn::Type)>,
         }
 
         impl<'a, 'ast> Visit<'ast> for Visitor<'a> {
             fn visit_ident(&mut self, ident: &'ast syn::Ident) {
-                if self.found {
-                    return;
-                }
                 let range: Range = ident.span().into();
                 let Some(symbol) = self.scip.symbol_at(&range) else { return };
                 let Some(info) = self.scip.symbol_info(symbol) else { return };
@@ -157,16 +157,35 @@ impl Rust2Zig {
                     return;
                 }
                 let Some(def) = info.range.as_ref() else { return };
-                if !self.span.contains(def) {
-                    self.found = true;
+                if self.span.contains(def) {
+                    return;
+                }
+                if self.seen.insert(symbol.to_string()) {
+                    if let Some(ty) = self.scip.type_at(&range) {
+                        self.captures.push((ident.clone(), ty));
+                    }
                 }
             }
         }
 
         let span: Range = ec.span().into();
-        let mut visitor = Visitor { scip: &self.scip, span, found: false };
+        let mut visitor = Visitor {
+            scip: &self.scip,
+            span,
+            seen: HashSet::new(),
+            captures: Vec::new(),
+        };
         visitor.visit_expr(&ec.body);
-        visitor.found
+        visitor.captures
+    }
+
+    pub fn is_closure_type(&self, ty: &syn::Type) -> bool {
+        let syn::Type::ImplTrait(it) = ty else { return false };
+        it.bounds.iter().any(|bound| {
+            let syn::TypeParamBound::Trait(tb) = bound else { return false };
+            let Some(last) = tb.path.segments.last() else { return false };
+            matches!(last.ident.to_string().as_str(), "Fn" | "FnMut" | "FnOnce")
+        })
     }
 
     pub fn closure_return_type(&self, ident: &syn::Ident) -> Option<syn::Type> {
@@ -209,7 +228,16 @@ impl Rust2Zig {
             PathMode::Normal => {
                 let kind = self.scip.kind_at(&ident.span().into());
                 if matches!(kind, Some(Kind::Variable) | Some(Kind::Parameter)) {
-                    write!(self.out, "{}", self.rename_ident(ident)).unwrap();
+                    let name = self.rename_ident(ident);
+                    if let Some(map) = self.capture_stack.last() {
+                        if let Some(symbol) = self.scip.symbol_at(&ident.span().into()) {
+                            if let Some(field) = map.get(symbol) {
+                                write!(self.out, "self.{}", field).unwrap();
+                                return;
+                            }
+                        }
+                    }
+                    write!(self.out, "{}", name).unwrap();
                 } else {
                     write!(self.out, "{}", snake_to_camel(&ident.to_string())).unwrap();
                 }
