@@ -15,6 +15,7 @@ impl Rust2Zig {
             syn::Expr::Field(ef) => self.translate_field(ef),
             syn::Expr::ForLoop(efl) => self.translate_for_loop(efl),
             syn::Expr::If(ei) => self.translate_if(ei),
+            syn::Expr::Index(ei) => self.translate_index(ei),
             syn::Expr::Lit(el) => self.translate_lit(el),
             syn::Expr::Macro(em) => {
                 if !self.translate_macro(&em.mac) {
@@ -23,10 +24,6 @@ impl Rust2Zig {
             }
             syn::Expr::Match(em) => self.translate_match(em),
             syn::Expr::MethodCall(emc) => self.translate_method_call(emc),
-            syn::Expr::Reference(er) => {
-                write!(self.out, "&").unwrap();
-                self.translate_expr(&er.expr);
-            }
             syn::Expr::Path(ep) => {
                 let mode = self.path_mode(&ep.path);
                 if matches!(mode, PathMode::EnumVariant) {
@@ -39,6 +36,8 @@ impl Rust2Zig {
                     }
                 }
             }
+            syn::Expr::Reference(er) => self.translate_reference(er),
+            syn::Expr::Return(er) => self.translate_return(er),
             syn::Expr::Struct(es) => self.translate_struct_expr(es),
             syn::Expr::Tuple(et) => self.translate_tuple(et),
             syn::Expr::Unary(eu) => self.translate_unary(eu),
@@ -130,6 +129,13 @@ impl Rust2Zig {
         }
     }
 
+    fn translate_index(&mut self, ei: &syn::ExprIndex) {
+        self.translate_expr(&ei.expr);
+        write!(self.out, "[").unwrap();
+        self.translate_expr(&ei.index);
+        write!(self.out, "]").unwrap();
+    }
+
     fn translate_lit(&mut self, el: &syn::ExprLit) {
         match &el.lit {
             syn::Lit::Bool(b) => write!(self.out, "{}", b.value).unwrap(),
@@ -207,20 +213,22 @@ impl Rust2Zig {
         write!(self.out, "{}}}", self.pad()).unwrap();
     }
 
+    fn translate_reference(&mut self, er: &syn::ExprReference) {
+        write!(self.out, "&").unwrap();
+        self.translate_expr(&er.expr);
+    }
+
+    fn translate_return(&mut self, er: &syn::ExprReturn) {
+        write!(self.out, "return").unwrap();
+        if let Some(expr) = &er.expr {
+            write!(self.out, " ").unwrap();
+            self.translate_expr(expr);
+        }
+    }
+
     fn translate_struct_expr(&mut self, es: &syn::ExprStruct) {
         if matches!(self.path_mode(&es.path), PathMode::EnumVariant) {
-            let variant = camel_to_snake(&es.path.segments.last().unwrap().ident.to_string());
-            write!(self.out, ".{{ .{} = .{{ ", variant).unwrap();
-            for (i, field) in es.fields.iter().enumerate() {
-                if i > 0 {
-                    write!(self.out, ", ").unwrap();
-                }
-                if let syn::Member::Named(ident) = &field.member {
-                    write!(self.out, ".{} = ", ident).unwrap();
-                }
-                self.translate_expr(&field.expr);
-            }
-            write!(self.out, " }} }}").unwrap();
+            self.translate_struct_constructor(es);
             return;
         }
         self.translate_path(&es.path, PathMode::Normal);
@@ -236,6 +244,21 @@ impl Rust2Zig {
             self.translate_expr(&field.expr);
         }
         write!(self.out, " }}").unwrap();
+    }
+
+    fn translate_struct_constructor(&mut self, es: &syn::ExprStruct) {
+        let variant = camel_to_snake(&es.path.segments.last().unwrap().ident.to_string());
+        write!(self.out, ".{{ .{} = .{{ ", variant).unwrap();
+        for (i, field) in es.fields.iter().enumerate() {
+            if i > 0 {
+                write!(self.out, ", ").unwrap();
+            }
+            if let syn::Member::Named(ident) = &field.member {
+                write!(self.out, ".{} = ", ident).unwrap();
+            }
+            self.translate_expr(&field.expr);
+        }
+        write!(self.out, " }} }}").unwrap();
     }
 
     fn translate_tuple(&mut self, et: &syn::ExprTuple) {

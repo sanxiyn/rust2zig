@@ -20,6 +20,8 @@ translated. Generated Zig should be suitable for human consumption.
 * `src/translate/mod.rs`: `Rust2Zig` struct, analysis pass, shared helpers
   (path, check_moniker, path_mode)
 * `src/translate/call.rs`: function and method call translation
+* `src/translate/closure.rs`: closure translation (`collect_captures`,
+  `closure_return_type`, `is_closure_type`, `translate_closure_local`)
 * `src/translate/expr.rs`: expression translation
 * `src/translate/flow.rs`: control flow translation (for, if, while, break, continue)
 * `src/translate/generic.rs`: generic function analysis (`GenericArgRef`,
@@ -120,8 +122,8 @@ run a subset; with no arguments, all examples run.
 Examples currently passing both suites: gcd, direction, div, option, result,
 ratio (struct), divmod (tuple), sum (for loop), geometry, closure, min
 (generic function), iter, inc (`&mut T` and `&T` parameters), geometry2
-(`&mut self` receiver). The `option` example also exercises a generic method
-(`Option::and`) and `&self` receiver.
+(`&mut self` receiver), dot. The `option` example also exercises a generic
+method (`Option::and`) and `&self` receiver.
 
 ## Notes
 
@@ -137,6 +139,15 @@ ratio (struct), divmod (tuple), sum (for loop), geometry, closure, min
   ranges (`a..=b`) become `a..(b+1)` in Zig; the capture is `usize`,
   so the body is wrapped with a preamble
   `const x: T = @intCast(_x);` using `Scip::type_at` on the loop var.
+  A `for (x, y) in std::iter::zip(a, b)` loop (detected via
+  `check_moniker`) becomes Zig's multi-object `for (a, b) |x, y|`, with
+  each capture taking `*` when its iterable is a slice (`iter_by_ref`,
+  shared with the single-iterable case).
+  A `for (i, e) in l.iter().enumerate()` loop becomes Zig's indexed
+  `for (l, 0..) |e, i|` (note Rust's `(index, element)` order is
+  flipped, since Zig's index operand comes last). `peel_iter` strips a
+  `.iter()` receiver (moniker `core::slice::iter`) to recover the base
+  iterable and its by-ref-ness.
 * `break` (without label or value) translates verbatim. Labels and
   break-with-value are TODO and only relevant once `loop` lands.
 * `continue` (without label) translates verbatim.
@@ -148,6 +159,8 @@ ratio (struct), divmod (tuple), sum (for loop), geometry, closure, min
   of `%` is a signed integer, the operator is rewritten as
   `@rem(left, right)` since Zig rejects `%` on signed runtime ints.
   `peel_ref` and `is_signed_int` are local helpers in `expr.rs`.
+* Indexing `a[i]` (`translate_index`) translates verbatim to Zig
+  `a[i]`. Slicing (`a[i..j]`, where the index is a range) is TODO.
 * Slice `.len()` is special-cased in `translate_method_call`: detected
   via `check_moniker_ident(method, "core::slice::len")` and emitted as
   the Zig `.len` field access.
@@ -211,8 +224,8 @@ ratio (struct), divmod (tuple), sum (for loop), geometry, closure, min
 * Format specifiers: Without type info, `println!("{}", x)` translates
   to `std.debug.print("{}\n", .{x})`. This works for integers but not for
   strings. Currently hacked with sed, see `test.sh`.
-* For loops over iterators (other than ranges and `&[T]` slices) are
-  TODO.
+* For loops over iterators (other than ranges, arrays, slices, zip, and
+  enumerate) are TODO.
 * `&mut T` match scrutinees: capture-by-pointer logic in
   `translate_match_arms` always emits `*const` (via Zig's `|*x|` on a
   deref'd const pointer). For `&mut` scrutinees the captures should be

@@ -6,6 +6,14 @@ pub fn sum(xs: &[i32]) -> i32 {
     total
 }
 
+pub fn sum2(xs: &[i32]) -> i32 {
+    let mut total = 0;
+    for i in 0..xs.len() {
+        total += xs[i];
+    }
+    total
+}
+
 pub fn sum_odd(xs: &[i32]) -> i32 {
     let mut total = 0;
     for x in xs {
@@ -31,6 +39,12 @@ fn test_sum() {
         total += x;
     }
     assert_eq!(15, total);
+}
+
+#[test]
+fn test_sum2() {
+    let xs = [1, 2, 3, 4, 5];
+    assert_eq!(15, sum2(&xs));
 }
 
 #[test]

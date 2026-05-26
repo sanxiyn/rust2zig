@@ -8,6 +8,15 @@ fn sum(xs: []const i32) i32 {
     return total;
 }
 
+fn sum2(xs: []const i32) i32 {
+    var total: i32 = 0;
+    for (0..xs.len) |_i| {
+        const i: usize = @intCast(_i);
+        total += xs[i];
+    }
+    return total;
+}
+
 fn sumOdd(xs: []const i32) i32 {
     var total: i32 = 0;
     for (xs) |*x| {
@@ -33,6 +42,11 @@ test "sum" {
         total += x;
     }
     try std.testing.expectEqual(15, total);
+}
+
+test "sum2" {
+    const xs: [5]i32 = .{ 1, 2, 3, 4, 5 };
+    try std.testing.expectEqual(15, sum2(&xs));
 }
 
 test "sum_odd" {

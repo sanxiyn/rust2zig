@@ -75,3 +75,22 @@ fn test_map() {
 ```
 
 Regenerate SCIP, run `test.sh` and `test_test.sh`.
+
+## Slicing
+
+Goal: translate `a[i..j]` (an `Expr::Index` whose index is a
+`Expr::Range`) to a Zig slice expression.
+
+`translate_index` currently handles only scalar indexing (`a[i]`).
+Branch on the index being a range and emit Zig's slice syntax, with the
+range rewrites:
+
+* `a[i..j]` -> `a[i..j]`
+* `a[i..]`  -> `a[i..]`
+* `a[..j]`  -> `a[0..j]` (Zig has no open-start sugar)
+* `a[..]`   -> `a[0..]`
+* `a[i..=j]` -> `a[i..j + 1]` (reuse the closed-range `+1` logic from
+  `translate_for_range`)
+
+Add a natural example (the user is choosing one) covering at least the
+half-open and open-start cases, then regenerate SCIP and run both suites.

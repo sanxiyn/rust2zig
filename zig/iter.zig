@@ -15,11 +15,28 @@ fn position(comptime T: type, l: []const T, v: T) ?usize {
     }
 }
 
+fn position2(comptime T: type, l: []const T, v: T) ?usize {
+    for (l, 0..) |*e, i| {
+        if (e.* == v) {
+            return i;
+        }
+    }
+    return null;
+}
+
 test "position" {
     const l: []const i32 = &.{ 1, 2, 3, 4, 5 };
     const v: i32 = 3;
     try std.testing.expectEqual(2, position(i32, l, v));
     const v2: i32 = 6;
     try std.testing.expectEqual(null, position(i32, l, v2));
+}
+
+test "position2" {
+    const l: []const i32 = &.{ 1, 2, 3, 4, 5 };
+    const v: i32 = 3;
+    try std.testing.expectEqual(2, position2(i32, l, v));
+    const v2: i32 = 6;
+    try std.testing.expectEqual(null, position2(i32, l, v2));
 }
 

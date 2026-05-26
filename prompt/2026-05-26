@@ -1,0 +1,20 @@
+First, read README.md.
+Let's start by refactoring a bit. Split closure related codes to closure.rs.
+Yes, update README.
+Split Expr::Reference arm to method, to make it consistent with other cases.
+Split range case of for loop translation to translate_for_range method.
+A new example, dot. a = [1, 2, 3]; b = [4, 5, 6]; dot(a, b) is 32. dot takes two &[i32] and use std::iter::zip.
+I think no type annotation is needed.
+What other cases of for loop are worth special casing because they have equivalents in Zig?
+Add position2 using enumerate to iter example.
+We are not handling indexing (and slicing), are we?
+Add sum2 to sum example, iterating over 0..xs.len() and indexing. I will think about natural examples for slicing.
+Split option case of if translation to translate_if_option method.
+What other cases of special casing are worth splitting to methods?
+Split translate_call_constructor and translate_struct_constructor.
+Split translate_test.
+Update TODO with slicing.
+I meant TODO.md.
+How do you think things are going so far?
+Update memory as needed to reflect the current status.
+/exit

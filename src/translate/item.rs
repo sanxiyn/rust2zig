@@ -204,12 +204,7 @@ impl Rust2Zig {
         let is_test = f.attrs.iter().any(|a| a.path().is_ident("test"));
 
         if is_test {
-            let n = name.to_string();
-            let test_name = n.strip_prefix("test_").unwrap_or(&n);
-            write!(self.out, "test \"{}\" ", test_name).unwrap();
-            self.translate_block(&f.block);
-            writeln!(self.out).unwrap();
-            writeln!(self.out).unwrap();
+            self.translate_test(f);
             return;
         }
 
@@ -254,6 +249,15 @@ impl Rust2Zig {
             .map(|name| format!("var {name} = _{name};"))
             .collect();
         self.translate_block_with_preamble(&f.block, &preamble);
+        writeln!(self.out).unwrap();
+        writeln!(self.out).unwrap();
+    }
+
+    fn translate_test(&mut self, f: &syn::ItemFn) {
+        let name = f.sig.ident.to_string();
+        let test_name = name.strip_prefix("test_").unwrap_or(&name);
+        write!(self.out, "test \"{}\" ", test_name).unwrap();
+        self.translate_block(&f.block);
         writeln!(self.out).unwrap();
         writeln!(self.out).unwrap();
     }

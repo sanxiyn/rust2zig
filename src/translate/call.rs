@@ -8,23 +8,7 @@ impl Rust2Zig {
     pub fn translate_call(&mut self, ec: &syn::ExprCall) {
         if let syn::Expr::Path(ep) = &*ec.func {
             if matches!(self.path_mode(&ep.path), PathMode::EnumVariant) {
-                let name = ep.path.segments.last().unwrap().ident.to_string();
-                let variant = camel_to_snake(&name);
-                write!(self.out, ".{{ .{} = ", variant).unwrap();
-                let multi = ec.args.len() > 1;
-                if multi {
-                    write!(self.out, ".{{ ").unwrap();
-                }
-                for (i, arg) in ec.args.iter().enumerate() {
-                    if i > 0 {
-                        write!(self.out, ", ").unwrap();
-                    }
-                    self.translate_expr(arg);
-                }
-                if multi {
-                    write!(self.out, " }}").unwrap();
-                }
-                write!(self.out, " }}").unwrap();
+                self.translate_call_constructor(ec, &ep.path);
                 return;
             }
             if self.check_moniker(&ep.path, "core::option::Option::Some") {
@@ -70,6 +54,26 @@ impl Rust2Zig {
             self.translate_expr(arg);
         }
         write!(self.out, ")").unwrap();
+    }
+
+    fn translate_call_constructor(&mut self, ec: &syn::ExprCall, path: &syn::Path) {
+        let name = path.segments.last().unwrap().ident.to_string();
+        let variant = camel_to_snake(&name);
+        write!(self.out, ".{{ .{} = ", variant).unwrap();
+        let multi = ec.args.len() > 1;
+        if multi {
+            write!(self.out, ".{{ ").unwrap();
+        }
+        for (i, arg) in ec.args.iter().enumerate() {
+            if i > 0 {
+                write!(self.out, ", ").unwrap();
+            }
+            self.translate_expr(arg);
+        }
+        if multi {
+            write!(self.out, " }}").unwrap();
+        }
+        write!(self.out, " }}").unwrap();
     }
 
     pub fn translate_method_call(&mut self, emc: &syn::ExprMethodCall) {

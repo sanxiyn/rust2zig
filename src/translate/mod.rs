@@ -1,7 +1,8 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::fmt::Write;
 
 mod call;
+mod closure;
 mod expr;
 mod flow;
 mod generic;
@@ -13,7 +14,7 @@ mod rename;
 mod stmt;
 mod ty;
 
-use crate::scip::{Kind, Range, Scip};
+use crate::scip::{Kind, Scip};
 use generic::GenericFn;
 use name::{camel_to_snake, snake_to_camel};
 
@@ -72,7 +73,10 @@ impl Rust2Zig {
             "core::option::Option" => "option/Option#",
             "core::option::Option::Some" => "option/Option#Some#",
             "core::option::Option::None" => "option/Option#None#",
+            "core::iter::Iterator::enumerate" => "iter/traits/iterator/Iterator#enumerate().",
+            "core::slice::iter" => "slice/impl#[`[T]`]iter().",
             "core::slice::len" => "slice/impl#[`[T]`]len().",
+            "std::iter::zip" => "iter/adapters/zip/zip().",
             "std::macros::panic" => "macros/panic!",
             "std::macros::println" => "macros/println!",
             _ => return false,
@@ -135,71 +139,6 @@ impl Rust2Zig {
         }
 
         self.collect_renames(file);
-    }
-
-    pub fn collect_captures(&self, ec: &syn::ExprClosure) -> Vec<(syn::Ident, syn::Type)> {
-        use syn::spanned::Spanned;
-        use syn::visit::Visit;
-
-        struct Visitor<'a> {
-            scip: &'a Scip,
-            span: Range,
-            seen: HashSet<String>,
-            captures: Vec<(syn::Ident, syn::Type)>,
-        }
-
-        impl<'a, 'ast> Visit<'ast> for Visitor<'a> {
-            fn visit_ident(&mut self, ident: &'ast syn::Ident) {
-                let range: Range = ident.span().into();
-                let Some(symbol) = self.scip.symbol_at(&range) else { return };
-                let Some(info) = self.scip.symbol_info(symbol) else { return };
-                if !matches!(info.kind, Kind::Variable | Kind::Parameter) {
-                    return;
-                }
-                let Some(def) = info.range.as_ref() else { return };
-                if self.span.contains(def) {
-                    return;
-                }
-                if self.seen.insert(symbol.to_string()) {
-                    if let Some(ty) = self.scip.type_at(&range) {
-                        self.captures.push((ident.clone(), ty));
-                    }
-                }
-            }
-        }
-
-        let span: Range = ec.span().into();
-        let mut visitor = Visitor {
-            scip: &self.scip,
-            span,
-            seen: HashSet::new(),
-            captures: Vec::new(),
-        };
-        visitor.visit_expr(&ec.body);
-        visitor.captures
-    }
-
-    pub fn is_closure_type(&self, ty: &syn::Type) -> bool {
-        let syn::Type::ImplTrait(it) = ty else { return false };
-        it.bounds.iter().any(|bound| {
-            let syn::TypeParamBound::Trait(tb) = bound else { return false };
-            let Some(last) = tb.path.segments.last() else { return false };
-            matches!(last.ident.to_string().as_str(), "Fn" | "FnMut" | "FnOnce")
-        })
-    }
-
-    pub fn closure_return_type(&self, ident: &syn::Ident) -> Option<syn::Type> {
-        let ty = self.scip.type_at(&ident.span().into())?;
-        let syn::Type::ImplTrait(it) = ty else { return None };
-        for bound in it.bounds {
-            let syn::TypeParamBound::Trait(tb) = bound else { continue };
-            let Some(last) = tb.path.segments.last() else { continue };
-            let syn::PathArguments::Parenthesized(p) = &last.arguments else { continue };
-            if let syn::ReturnType::Type(_, t) = &p.output {
-                return Some((**t).clone());
-            }
-        }
-        None
     }
 
     pub fn path_mode(&self, path: &syn::Path) -> PathMode {
