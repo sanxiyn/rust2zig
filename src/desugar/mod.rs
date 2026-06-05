@@ -1,0 +1,10 @@
+mod binary;
+mod match_ergonomics;
+
+use crate::scip::Scip;
+
+pub fn desugar(scip: &Scip, mut file: syn::File) -> syn::File {
+    binary::run(scip, &mut file);
+    match_ergonomics::run(scip, &mut file);
+    file
+}

@@ -1,0 +1,18 @@
+First, read README.md.
+I am considering some large scale redesigns. For example, I think "desugaring" should be a separate phase. Things like match ergonomics should be handled there. That is, currently we are going from Rust syn AST to Zig string. Desugaring phase would go from Rust syn AST to Rust syn AST, and then we would generate Zig.
+I am pretty keen on keeping syn for now. Besides abstract desire to keep it clean, I want to reuse desugaring when I write, say, rust2ml in the future. As for spans, isn't it enough to use quote? Interpolated nodes will keep original spans. Synthetic nodes won't have useful spans, but I think we don't query on synthetic nodes so it should be okay.
+Do the empirical test.
+No need to keep them. Take them out.
+Let's move match ergonomics to desugar as a pilot. Put it on src/desugar/match_ergonomics.rs, I think.
+That doesn't look right. Since binding modes are explicit now, we'd handle them arm by arm, not uniformly.
+Let's make it translate_match_arm (singular) and iterate in translate_match.
+It is unclear to me whether binary operator deref insertion is Zig specific. Hypothetically, if we use OCaml references for rust2ml, we'd also want deref insertion, since (+) operates on int, not int ref.
+Move binary operator deref insertion to desugar as well, leaving Zig specific @rem translation. Put it on src/desugar/binary.rs.
+Now update README.
+Now update memory.
+Explicit constructions of syn::Expr::Unary in desugar seem cumbersome to me. I think they would be improved by usnig parse_quote!, eg parse_quote!(*#expr), which makes the code almost self-documenting.
+I think parse_quote! would simplify ref/ref mut insertion as well. if mutable { parse_quote!(ref #pat) } else { parse_quote!(ref mut #pat) reads very naturally to me.
+I find pat_has_ref unsatisfying. Logically, it is a capture, not a pattern, that is by reference. I think translate_match_pat should return a struct Capture, with fields name, accessor, and by_ref, instead of a tuple.
+How do you think things are going so far?
+/insights
+/exit

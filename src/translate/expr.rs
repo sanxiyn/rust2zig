@@ -66,36 +66,25 @@ impl Rust2Zig {
     }
 
     fn translate_binary(&mut self, eb: &syn::ExprBinary) {
-        use syn::spanned::Spanned;
-        let types = self.scip.binary_type_at(&eb.op.span().into());
-        let (left_ref, right_ref) = match &types {
-            Some((l, r)) => (matches!(l, syn::Type::Reference(_)), matches!(r, syn::Type::Reference(_))),
-            None => (false, false),
-        };
-        if matches!(eb.op, syn::BinOp::Rem(_)) {
-            let signed = match &types {
-                Some((l, _)) => is_signed_int(peel_ref(l)),
-                None => false,
-            };
-            if signed {
-                write!(self.out, "@rem(").unwrap();
-                self.translate_operand(&eb.left, left_ref);
-                write!(self.out, ", ").unwrap();
-                self.translate_operand(&eb.right, right_ref);
-                write!(self.out, ")").unwrap();
-                return;
-            }
+        if matches!(eb.op, syn::BinOp::Rem(_)) && self.rem_is_signed(eb) {
+            write!(self.out, "@rem(").unwrap();
+            self.translate_expr(&eb.left);
+            write!(self.out, ", ").unwrap();
+            self.translate_expr(&eb.right);
+            write!(self.out, ")").unwrap();
+            return;
         }
-        self.translate_operand(&eb.left, left_ref);
+        self.translate_expr(&eb.left);
         let op = self.translate_binop(&eb.op);
         write!(self.out, " {} ", op).unwrap();
-        self.translate_operand(&eb.right, right_ref);
+        self.translate_expr(&eb.right);
     }
 
-    fn translate_operand(&mut self, expr: &syn::Expr, deref: bool) {
-        self.translate_expr(expr);
-        if deref {
-            write!(self.out, ".*").unwrap();
+    fn rem_is_signed(&self, eb: &syn::ExprBinary) -> bool {
+        use syn::spanned::Spanned;
+        match self.scip.binary_type_at(&eb.op.span().into()) {
+            Some((left, _)) => is_signed_int(peel_ref(&left)),
+            None => false,
         }
     }
 
@@ -147,70 +136,55 @@ impl Rust2Zig {
 
     fn translate_match(&mut self, em: &syn::ExprMatch) {
         write!(self.out, "switch (").unwrap();
-        let deref = self.match_needs_deref(em);
         self.translate_expr(&em.expr);
-        if deref {
-            write!(self.out, ".*").unwrap();
-        }
-        write!(self.out, ") ").unwrap();
-        self.translate_match_arms(&em.arms, deref);
-    }
-
-    fn match_needs_deref(&self, em: &syn::ExprMatch) -> bool {
-        if em.arms.iter().any(|arm| matches!(arm.pat, syn::Pat::Reference(_))) {
-            return false;
-        }
-        let syn::Expr::Path(ep) = &*em.expr else { return false };
-        let Some(ident) = ep.path.get_ident() else { return false };
-        let Some(ty) = self.scip.type_at(&ident.span().into()) else { return false };
-        matches!(ty, syn::Type::Reference(_))
-    }
-
-    fn translate_match_arms(&mut self, arms: &[syn::Arm], capture_by_ref: bool) {
-        writeln!(self.out, "{{").unwrap();
+        writeln!(self.out, ") {{").unwrap();
         self.indent();
-        let star = if capture_by_ref { "*" } else { "" };
-        let amp = if capture_by_ref { "&" } else { "" };
-        for arm in arms {
-            let pad = self.pad();
-            write!(self.out, "{}", pad).unwrap();
-            let variant = match &arm.pat {
-                syn::Pat::TupleStruct(pts) => {
-                    Some(camel_to_snake(&pts.path.segments.last().unwrap().ident.to_string()))
-                }
-                syn::Pat::Struct(ps) => {
-                    Some(camel_to_snake(&ps.path.segments.last().unwrap().ident.to_string()))
-                }
-                _ => None,
-            };
-            let captures = self.translate_match_pat(&arm.pat);
-            write!(self.out, " => ").unwrap();
-            let use_block = captures.len() > 1
-                || captures.iter().any(|(_, acc)| acc.starts_with('.'));
-            if use_block {
-                let payload = format!("_{}", variant.unwrap());
-                writeln!(self.out, "|{}{}| blk: {{", star, payload).unwrap();
-                self.indent();
-                for (capture, accessor) in &captures {
-                    let pad = self.pad();
-                    writeln!(self.out, "{}const {} = {}{}{};", pad, capture, amp, payload, accessor).unwrap();
-                }
-                let pad = self.pad();
-                write!(self.out, "{}break :blk ", pad).unwrap();
-                self.translate_expr(&arm.body);
-                writeln!(self.out, ";").unwrap();
-                self.dedent();
-                write!(self.out, "{}}}", self.pad()).unwrap();
-            } else {
-                if let Some((capture, _)) = captures.first() {
-                    write!(self.out, "|{}{}| ", star, capture).unwrap();
-                }
-                self.translate_expr(&arm.body);
-            }
-            writeln!(self.out, ",").unwrap();
+        for arm in &em.arms {
+            self.translate_match_arm(arm);
         }
         self.dedent();
         write!(self.out, "{}}}", self.pad()).unwrap();
+    }
+
+    fn translate_match_arm(&mut self, arm: &syn::Arm) {
+        let pad = self.pad();
+        write!(self.out, "{}", pad).unwrap();
+        let variant = match &arm.pat {
+            syn::Pat::TupleStruct(pts) => {
+                Some(camel_to_snake(&pts.path.segments.last().unwrap().ident.to_string()))
+            }
+            syn::Pat::Struct(ps) => {
+                Some(camel_to_snake(&ps.path.segments.last().unwrap().ident.to_string()))
+            }
+            _ => None,
+        };
+        let captures = self.translate_match_pat(&arm.pat);
+        write!(self.out, " => ").unwrap();
+        let star = if captures.iter().any(|capture| capture.by_ref) { "*" } else { "" };
+        let use_block = captures.len() > 1
+            || captures.iter().any(|capture| capture.accessor.starts_with('.'));
+        if use_block {
+            let payload = format!("_{}", variant.unwrap());
+            writeln!(self.out, "|{}{}| blk: {{", star, payload).unwrap();
+            self.indent();
+            for capture in &captures {
+                let amp = if capture.by_ref { "&" } else { "" };
+                let pad = self.pad();
+                writeln!(self.out, "{}const {} = {}{}{};", pad, capture.name, amp, payload, capture.accessor).unwrap();
+            }
+            let pad = self.pad();
+            write!(self.out, "{}break :blk ", pad).unwrap();
+            self.translate_expr(&arm.body);
+            writeln!(self.out, ";").unwrap();
+            self.dedent();
+            write!(self.out, "{}}}", self.pad()).unwrap();
+        } else {
+            if let Some(capture) = captures.first() {
+                write!(self.out, "|{}{}| ", star, capture.name).unwrap();
+            }
+            self.translate_expr(&arm.body);
+        }
+        writeln!(self.out, ",").unwrap();
     }
 
     fn translate_reference(&mut self, er: &syn::ExprReference) {

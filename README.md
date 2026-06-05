@@ -7,6 +7,8 @@ translated. Generated Zig should be suitable for human consumption.
 
 * Written in Rust, using `syn` for parsing
 * Use SCIP for semantic information
+* A desugaring phase rewrites the Rust AST into more explicit Rust (still a
+  `syn` AST) before translation, so emission can stay largely structural
 * Rust generics are translated to Zig comptime (enums, functions, and methods)
 * Rust references are translated to Zig pointers, lifetimes are erased
 * Identifiers that collide with Zig keywords are emitted as `@"name"`
@@ -17,6 +19,11 @@ translated. Generated Zig should be suitable for human consumption.
 * `src/scip.rs`: SCIP loading (prost-generated bindings from `proto/scip.proto`),
   exposes occurrence -> symbol and symbol -> (kind, signature) maps
 * `src/lsif.rs`: LSIF loader, currently unused (kept for reference)
+* `src/desugar/mod.rs`: `desugar` entry point, runs the AST-to-AST passes
+* `src/desugar/binary.rs`: inserts explicit derefs on reference operands
+  (`total += x` where `x: &i32` becomes `total += *x`)
+* `src/desugar/match_ergonomics.rs`: makes default binding modes explicit
+  (`match self` / `Some(x)` becomes `match *self` / `Some(ref x)`)
 * `src/translate/mod.rs`: `Rust2Zig` struct, analysis pass, shared helpers
   (path, check_moniker, path_mode)
 * `src/translate/call.rs`: function and method call translation
@@ -40,6 +47,28 @@ translated. Generated Zig should be suitable for human consumption.
 * `coverage.sh`: runs `test.sh` under `cargo-llvm-cov`, excluding the
   prost-generated `target/.../out/scip.rs` from the report. Output goes to
   `coverage/text/`; current findings are summarized in `coverage.md`.
+
+### Desugaring phase
+
+`desugar` runs on the parsed `syn::File` before `analyze` and `translate_file`,
+returning a rewritten `syn::File`. Each pass is a `syn::visit_mut::VisitMut`
+walk that turns implicit Rust into explicit Rust:
+
+* `binary`: at each binary operator, `Scip::binary_type_at` reports the
+  dispatched operand types; an operand typed `&T` (relying on Rust's
+  reference-operand impls like `Add<&i32>`) is wrapped in a `*` deref.
+* `match_ergonomics`: a match whose scrutinee is a `&T`/`&mut T` ident with no
+  explicit reference pattern has its scrutinee wrapped in `*` and its bindings
+  annotated `ref` (or `ref mut` for `&mut`).
+
+The discipline that makes this sound: SCIP is queried only at original spans.
+`quote`-style rewrites preserve the spans of interpolated (original) nodes, so
+SCIP still resolves there; synthetic nodes (the inserted `*`, `ref`) carry
+`call_site` zero-width spans that never match the occurrence map, and emission
+never queries them. Each pass recurses before rewriting so inner nodes are
+handled while their spans are still original. Because the result is valid Rust,
+the passes are backend-neutral and could be reused by other backends; only
+target-specific lowerings (e.g. signed `%` -> `@rem`) stay in the translator.
 
 ### Analysis pass
 
@@ -134,8 +163,9 @@ method (`Option::and`) and `&self` receiver.
   or a range. Arrays iterate by value (`for (xs) |x|`) matching Rust's
   `for x in [T; N]`. Slices iterate by reference (`for (xs) |*x|`)
   matching Rust's `for x in &[T]` yielding `&T`; uses of `x` in Zig
-  need `.*`, inserted either by `translate_unary` from Rust's `*x` or
-  by `translate_binary`'s reference detection (see below). Closed Rust
+  need `.*`, emitted by `translate_unary` from an explicit `*x` — either
+  written in source or introduced by the binary desugar pass (see below).
+  Closed Rust
   ranges (`a..=b`) become `a..(b+1)` in Zig; the capture is `usize`,
   so the body is wrapped with a preamble
   `const x: T = @intCast(_x);` using `Scip::type_at` on the loop var.
@@ -151,14 +181,14 @@ method (`Option::and`) and `&self` receiver.
 * `break` (without label or value) translates verbatim. Labels and
   break-with-value are TODO and only relevant once `loop` lands.
 * `continue` (without label) translates verbatim.
-* `translate_binary` queries `Scip::binary_type_at` for the dispatched
-  operand types. Each operand whose type is `&T` is followed by `.*` in
-  Zig, so idiomatic Rust like `total += x` / `x % 2 == 0` (where
-  `x: &i32`) translates to `total += x.*` / `x.* % 2 == 0` without an
-  explicit `*x` in source. Additionally, when the (peeled) left operand
-  of `%` is a signed integer, the operator is rewritten as
-  `@rem(left, right)` since Zig rejects `%` on signed runtime ints.
-  `peel_ref` and `is_signed_int` are local helpers in `expr.rs`.
+* Reference-operand derefs are handled in the `binary` desugar pass, not in
+  `translate_binary`: idiomatic Rust like `total += x` / `x % 2 == 0` (where
+  `x: &i32`) is desugared to `total += *x` / `*x % 2 == 0`, which then emits
+  `total += x.*` / `x.* % 2 == 0` via `translate_unary`. The only type-driven
+  decision left in `translate_binary` is the signed `%` -> `@rem(left, right)`
+  rewrite (Zig rejects `%` on signed runtime ints), gated by `rem_is_signed`
+  via `Scip::binary_type_at`. `peel_ref` and `is_signed_int` are local helpers
+  in `expr.rs`.
 * Indexing `a[i]` (`translate_index`) translates verbatim to Zig
   `a[i]`. Slicing (`a[i..j]`, where the index is a range) is TODO.
 * Slice `.len()` is special-cased in `translate_method_call`: detected
@@ -201,15 +231,18 @@ method (`Option::and`) and `&self` receiver.
   `&mut self` -> `self: *Self`, and `self` -> `self: Self`. At call
   sites `&x` / `&mut x` both emit Zig `&x`; Zig auto-takes the address
   for method calls on addressable values.
-* Match deref insertion: when the matched expression is an ident whose
-  SCIP type is a reference and no arm uses a reference pattern,
-  `translate_match` appends `.*` (e.g. `match self` on `&self` becomes
-  `switch (self.*)`) and `translate_match_arms` captures arm payloads
-  by pointer (`|*p|`, `|*_line|`) with field bindings taking addresses
-  (`const center = &_circle.center;`). This makes each Zig capture's
-  type correspond to the Rust binding-mode-derived type (`*const T`
-  matches Rust's `&T`), so `.*` insertion via `binary_type_at` works
-  uniformly inside arms.
+* Match ergonomics: the `match_ergonomics` desugar pass makes default
+  binding modes explicit before translation. A `match self` on `&self`
+  becomes `match *self` with `ref`/`ref mut` bindings, so emission stays
+  structural: the `*self` scrutinee lowers to `switch (self.*)` via the
+  existing `translate_unary`, and `translate_match_pat` records each
+  binding's mode on the returned `Capture { name, accessor, by_ref }`. A
+  `by_ref` capture (from a `ref`/`ref mut` binding) takes the switch
+  payload by pointer (`|*p|`, `|*_line|`) and each field by address
+  (`const center = &_circle.center;`); `translate_match_arm` reads these
+  off the captures per arm. Each Zig capture's type then corresponds to
+  the Rust binding-mode-derived type (`*const T` matches Rust's `&T`), so
+  `.*` insertion via `binary_type_at` works uniformly inside arms.
 * Zig keyword identifiers: `escape_zig` (in `src/translate/name.rs`)
   wraps reserved words like `and`, `or`, `var` in `@"..."` so e.g.
   `Option::and` translates to `fn @"and"(...)` and call sites become
@@ -226,7 +259,8 @@ method (`Option::and`) and `&self` receiver.
   strings. Currently hacked with sed, see `test.sh`.
 * For loops over iterators (other than ranges, arrays, slices, zip, and
   enumerate) are TODO.
-* `&mut T` match scrutinees: capture-by-pointer logic in
-  `translate_match_arms` always emits `*const` (via Zig's `|*x|` on a
+* `&mut T` match scrutinees: the `match_ergonomics` desugar records
+  `ref mut` bindings for `&mut` scrutinees, but `translate_match_arm`
+  ignores the mutability and always emits `*const` (via Zig's `|*x|` on a
   deref'd const pointer). For `&mut` scrutinees the captures should be
   `*T`, but no current example exercises this.

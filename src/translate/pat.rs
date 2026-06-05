@@ -3,6 +3,12 @@ use std::fmt::Write;
 use super::{PathMode, Rust2Zig};
 use super::name::camel_to_snake;
 
+pub struct Capture {
+    pub name: String,
+    pub accessor: String,
+    pub by_ref: bool,
+}
+
 impl Rust2Zig {
     pub fn translate_pat(&mut self, pat: &syn::Pat) {
         match pat {
@@ -23,7 +29,7 @@ impl Rust2Zig {
         }
     }
 
-    pub fn translate_match_pat(&mut self, pat: &syn::Pat) -> Vec<(String, String)> {
+    pub fn translate_match_pat(&mut self, pat: &syn::Pat) -> Vec<Capture> {
         match pat {
             syn::Pat::Ident(pi) => {
                 write!(self.out, "{}", self.rename_ident(&pi.ident)).unwrap();
@@ -36,11 +42,15 @@ impl Rust2Zig {
             syn::Pat::Struct(ps) => {
                 let variant = ps.path.segments.last().unwrap().ident.to_string();
                 write!(self.out, ".{}", camel_to_snake(&variant)).unwrap();
-                let mut captures: Vec<(String, String)> = Default::default();
+                let mut captures: Vec<Capture> = Default::default();
                 for field in &ps.fields {
                     if let syn::Member::Named(ident) = &field.member {
                         if let syn::Pat::Ident(pi) = &*field.pat {
-                            captures.push((self.rename_ident(&pi.ident), format!(".{}", ident)));
+                            captures.push(Capture {
+                                name: self.rename_ident(&pi.ident),
+                                accessor: format!(".{}", ident),
+                                by_ref: pi.by_ref.is_some(),
+                            });
                         }
                     }
                 }
@@ -49,10 +59,14 @@ impl Rust2Zig {
             syn::Pat::TupleStruct(pts) => {
                 let variant = pts.path.segments.last().unwrap().ident.to_string();
                 write!(self.out, ".{}", camel_to_snake(&variant)).unwrap();
-                let mut captures: Vec<(String, String)> = Default::default();
+                let mut captures: Vec<Capture> = Default::default();
                 for (i, elem) in pts.elems.iter().enumerate() {
                     if let syn::Pat::Ident(pi) = elem {
-                        captures.push((self.rename_ident(&pi.ident), format!("[{}]", i)));
+                        captures.push(Capture {
+                            name: self.rename_ident(&pi.ident),
+                            accessor: format!("[{}]", i),
+                            by_ref: pi.by_ref.is_some(),
+                        });
                     }
                 }
                 captures
