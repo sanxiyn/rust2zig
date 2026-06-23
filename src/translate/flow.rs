@@ -78,7 +78,7 @@ impl Rust2Zig {
             write!(self.out, "/* TODO: for */").unwrap();
             return;
         };
-        let pi = if let syn::Pat::Ident(pi) = &*efl.pat { pi } else {
+        let syn::Pat::Ident(pi) = &*efl.pat else {
             write!(self.out, "/* TODO: for */").unwrap();
             return;
         };
@@ -122,7 +122,6 @@ impl Rust2Zig {
             write!(self.out, "/* TODO: for */").unwrap();
             return;
         }
-        let by_refs: Vec<bool> = ec.args.iter().map(|arg| self.iter_by_ref(arg).unwrap_or(false)).collect();
         write!(self.out, "for (").unwrap();
         for (i, arg) in ec.args.iter().enumerate() {
             if i > 0 {
@@ -131,11 +130,11 @@ impl Rust2Zig {
             self.translate_expr(arg);
         }
         write!(self.out, ") |").unwrap();
-        for (i, elem) in pt.elems.iter().enumerate() {
+        for (i, (elem, arg)) in pt.elems.iter().zip(ec.args.iter()).enumerate() {
             if i > 0 {
                 write!(self.out, ", ").unwrap();
             }
-            if by_refs[i] {
+            if self.iter_by_ref(arg).unwrap_or(false) {
                 write!(self.out, "*").unwrap();
             }
             self.translate_pat(elem);

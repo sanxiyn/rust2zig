@@ -22,9 +22,9 @@ impl Rust2Zig {
         use syn::parse::Parser;
         use syn::punctuated::Punctuated;
         let parser = Punctuated::<syn::Expr, syn::Token![,]>::parse_terminated;
-        let args = parser.parse2(mac.tokens.clone()).expect("failed to parse assert_eq args");
+        let macro_args = parser.parse2(mac.tokens.clone()).expect("failed to parse assert_eq args");
         write!(self.out, "try std.testing.expectEqual(").unwrap();
-        for (i, arg) in args.iter().enumerate() {
+        for (i, arg) in macro_args.iter().enumerate() {
             if i > 0 {
                 write!(self.out, ", ").unwrap();
             }

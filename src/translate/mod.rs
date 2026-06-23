@@ -166,8 +166,7 @@ impl Rust2Zig {
         match mode {
             PathMode::Normal => {
                 let kind = self.scip.kind_at(&ident.span().into());
-                if matches!(kind, Some(Kind::Variable) | Some(Kind::Parameter)) {
-                    let name = self.rename_ident(ident);
+                if matches!(kind, Some(Kind::Parameter) | Some(Kind::Variable)) {
                     if let Some(map) = self.capture_stack.last() {
                         if let Some(symbol) = self.scip.symbol_at(&ident.span().into()) {
                             if let Some(field) = map.get(symbol) {
@@ -176,6 +175,7 @@ impl Rust2Zig {
                             }
                         }
                     }
+                    let name = self.rename_ident(ident);
                     write!(self.out, "{}", name).unwrap();
                 } else {
                     write!(self.out, "{}", snake_to_camel(&ident.to_string())).unwrap();

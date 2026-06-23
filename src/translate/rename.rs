@@ -19,8 +19,8 @@ impl Rust2Zig {
 
         let mut collector = Collector {
             scip: &self.scip,
-            renames: HashMap::new(),
-            stack: Vec::new(),
+            renames: Default::default(),
+            stack: Default::default(),
         };
         collector.visit_file(file);
         self.renames = collector.renames;
@@ -41,7 +41,7 @@ impl Collector<'_> {
         let symbol = symbol.to_string();
         let mut name = original.clone();
         let mut n = 2;
-        while self.stack.iter().any(|s| s.contains(&name)) {
+        while self.stack.iter().any(|scope| scope.contains(&name)) {
             name = format!("{original}{n}");
             n += 1;
         }
@@ -56,18 +56,18 @@ impl Collector<'_> {
             syn::Pat::Ident(pi) => self.bind_ident(&pi.ident),
             syn::Pat::Reference(pr) => self.bind_pat(&pr.pat),
             syn::Pat::Struct(ps) => {
-                for f in &ps.fields {
-                    self.bind_pat(&f.pat);
+                for field in &ps.fields {
+                    self.bind_pat(&field.pat);
                 }
             }
             syn::Pat::Tuple(pt) => {
-                for e in &pt.elems {
-                    self.bind_pat(e);
+                for elem in &pt.elems {
+                    self.bind_pat(elem);
                 }
             }
             syn::Pat::TupleStruct(pts) => {
-                for e in &pts.elems {
-                    self.bind_pat(e);
+                for elem in &pts.elems {
+                    self.bind_pat(elem);
                 }
             }
             syn::Pat::Type(pt) => self.bind_pat(&pt.pat),
@@ -78,7 +78,7 @@ impl Collector<'_> {
 
 impl<'ast> syn::visit::Visit<'ast> for Collector<'_> {
     fn visit_item_fn(&mut self, f: &'ast syn::ItemFn) {
-        self.stack.push(HashSet::new());
+        self.stack.push(Default::default());
         for arg in &f.sig.inputs {
             if let syn::FnArg::Typed(pt) = arg {
                 self.bind_pat(&pt.pat);
@@ -89,7 +89,7 @@ impl<'ast> syn::visit::Visit<'ast> for Collector<'_> {
     }
 
     fn visit_impl_item_fn(&mut self, m: &'ast syn::ImplItemFn) {
-        self.stack.push(HashSet::new());
+        self.stack.push(Default::default());
         for arg in &m.sig.inputs {
             if let syn::FnArg::Typed(pt) = arg {
                 self.bind_pat(&pt.pat);
@@ -100,7 +100,7 @@ impl<'ast> syn::visit::Visit<'ast> for Collector<'_> {
     }
 
     fn visit_block(&mut self, b: &'ast syn::Block) {
-        self.stack.push(HashSet::new());
+        self.stack.push(Default::default());
         syn::visit::visit_block(self, b);
         self.stack.pop();
     }
@@ -112,16 +112,8 @@ impl<'ast> syn::visit::Visit<'ast> for Collector<'_> {
         self.bind_pat(&local.pat);
     }
 
-    fn visit_expr_for_loop(&mut self, efl: &'ast syn::ExprForLoop) {
-        syn::visit::visit_expr(self, &efl.expr);
-        self.stack.push(HashSet::new());
-        self.bind_pat(&efl.pat);
-        syn::visit::visit_block(self, &efl.body);
-        self.stack.pop();
-    }
-
     fn visit_expr_closure(&mut self, ec: &'ast syn::ExprClosure) {
-        self.stack.push(HashSet::new());
+        self.stack.push(Default::default());
         for input in &ec.inputs {
             self.bind_pat(input);
         }
@@ -129,21 +121,16 @@ impl<'ast> syn::visit::Visit<'ast> for Collector<'_> {
         self.stack.pop();
     }
 
-    fn visit_expr_match(&mut self, em: &'ast syn::ExprMatch) {
-        syn::visit::visit_expr(self, &em.expr);
-        for arm in &em.arms {
-            self.stack.push(HashSet::new());
-            self.bind_pat(&arm.pat);
-            if let Some((_, guard)) = &arm.guard {
-                syn::visit::visit_expr(self, guard);
-            }
-            syn::visit::visit_expr(self, &arm.body);
-            self.stack.pop();
-        }
+    fn visit_expr_for_loop(&mut self, efl: &'ast syn::ExprForLoop) {
+        syn::visit::visit_expr(self, &efl.expr);
+        self.stack.push(Default::default());
+        self.bind_pat(&efl.pat);
+        syn::visit::visit_block(self, &efl.body);
+        self.stack.pop();
     }
 
     fn visit_expr_if(&mut self, ei: &'ast syn::ExprIf) {
-        self.stack.push(HashSet::new());
+        self.stack.push(Default::default());
         if let syn::Expr::Let(el) = &*ei.cond {
             syn::visit::visit_expr(self, &el.expr);
             self.bind_pat(&el.pat);
@@ -154,6 +141,19 @@ impl<'ast> syn::visit::Visit<'ast> for Collector<'_> {
         self.stack.pop();
         if let Some((_, else_expr)) = &ei.else_branch {
             syn::visit::visit_expr(self, else_expr);
+        }
+    }
+
+    fn visit_expr_match(&mut self, em: &'ast syn::ExprMatch) {
+        syn::visit::visit_expr(self, &em.expr);
+        for arm in &em.arms {
+            self.stack.push(Default::default());
+            self.bind_pat(&arm.pat);
+            if let Some((_, guard)) = &arm.guard {
+                syn::visit::visit_expr(self, guard);
+            }
+            syn::visit::visit_expr(self, &arm.body);
+            self.stack.pop();
         }
     }
 }

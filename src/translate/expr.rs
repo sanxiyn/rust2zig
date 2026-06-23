@@ -211,9 +211,8 @@ impl Rust2Zig {
             if i > 0 {
                 write!(self.out, ", ").unwrap();
             }
-            match &field.member {
-                syn::Member::Named(ident) => write!(self.out, ".{} = ", ident).unwrap(),
-                syn::Member::Unnamed(index) => write!(self.out, ".{} = ", index.index).unwrap(),
+            if let syn::Member::Named(ident) = &field.member {
+                write!(self.out, ".{} = ", ident).unwrap();
             }
             self.translate_expr(&field.expr);
         }
@@ -268,6 +267,6 @@ fn peel_ref(ty: &syn::Type) -> &syn::Type {
 
 fn is_signed_int(ty: &syn::Type) -> bool {
     let syn::Type::Path(tp) = ty else { return false };
-    let Some(seg) = tp.path.segments.last() else { return false };
-    matches!(seg.ident.to_string().as_str(), "i8" | "i16" | "i32" | "i64" | "i128" | "isize")
+    let Some(segment) = tp.path.segments.last() else { return false };
+    matches!(segment.ident.to_string().as_str(), "i8" | "i16" | "i32" | "i64" | "i128" | "isize")
 }

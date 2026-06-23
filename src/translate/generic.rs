@@ -14,7 +14,7 @@ pub struct GenericFn {
 pub fn find_type_param(ty: &syn::Type, name: &str) -> Option<Vec<usize>> {
     let syn::Type::Path(tp) = ty else { return None };
     if tp.path.is_ident(name) {
-        return Some(Vec::new());
+        return Some(Default::default());
     }
     let last = tp.path.segments.last()?;
     let syn::PathArguments::AngleBracketed(ab) = &last.arguments else { return None };
