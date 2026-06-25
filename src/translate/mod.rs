@@ -69,11 +69,11 @@ impl Rust2Zig {
         let range = ident.span().into();
         let Some(symbol) = self.scip.symbol_at(&range) else { return false };
         let suffix = match expected {
+            "core::iter::Iterator::enumerate" => "iter/traits/iterator/Iterator#enumerate().",
             "core::macros::assert_eq" => "macros/assert_eq!",
             "core::option::Option" => "option/Option#",
             "core::option::Option::Some" => "option/Option#Some#",
             "core::option::Option::None" => "option/Option#None#",
-            "core::iter::Iterator::enumerate" => "iter/traits/iterator/Iterator#enumerate().",
             "core::slice::iter" => "slice/impl#[`[T]`]iter().",
             "core::slice::len" => "slice/impl#[`[T]`]len().",
             "std::iter::zip" => "iter/adapters/zip/zip().",
@@ -186,5 +186,4 @@ impl Rust2Zig {
             }
         }
     }
-
 }

@@ -150,11 +150,11 @@ impl Rust2Zig {
         let pad = self.pad();
         write!(self.out, "{}", pad).unwrap();
         let variant = match &arm.pat {
-            syn::Pat::TupleStruct(pts) => {
-                Some(camel_to_snake(&pts.path.segments.last().unwrap().ident.to_string()))
-            }
             syn::Pat::Struct(ps) => {
                 Some(camel_to_snake(&ps.path.segments.last().unwrap().ident.to_string()))
+            }
+            syn::Pat::TupleStruct(pts) => {
+                Some(camel_to_snake(&pts.path.segments.last().unwrap().ident.to_string()))
             }
             _ => None,
         };

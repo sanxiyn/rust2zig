@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
 
 use crate::scip::{Kind, Range, Scip};
@@ -16,12 +16,12 @@ impl Rust2Zig {
             captures: Vec<(syn::Ident, syn::Type)>,
         }
 
-        impl<'a, 'ast> Visit<'ast> for Visitor<'a> {
+        impl<'ast> Visit<'ast> for Visitor<'_> {
             fn visit_ident(&mut self, ident: &'ast syn::Ident) {
                 let range: Range = ident.span().into();
                 let Some(symbol) = self.scip.symbol_at(&range) else { return };
                 let Some(info) = self.scip.symbol_info(symbol) else { return };
-                if !matches!(info.kind, Kind::Variable | Kind::Parameter) {
+                if !matches!(info.kind, Kind::Parameter | Kind::Variable) {
                     return;
                 }
                 let Some(def) = info.range.as_ref() else { return };
@@ -40,8 +40,8 @@ impl Rust2Zig {
         let mut visitor = Visitor {
             scip: &self.scip,
             span,
-            seen: HashSet::new(),
-            captures: Vec::new(),
+            seen: Default::default(),
+            captures: Default::default(),
         };
         visitor.visit_expr(&ec.body);
         visitor.captures
@@ -106,7 +106,7 @@ impl Rust2Zig {
             write!(self.out, "void").unwrap();
         }
         write!(self.out, " ").unwrap();
-        let mut map: std::collections::HashMap<String, String> = Default::default();
+        let mut map: HashMap<String, String> = Default::default();
         for ((ident, _), field) in captures.iter().zip(capture_fields.iter()) {
             if let Some(symbol) = self.scip.symbol_at(&ident.span().into()) {
                 map.insert(symbol.to_string(), field.clone());

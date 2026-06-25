@@ -1,7 +1,6 @@
 use std::fmt::Write;
 
 use super::{PathMode, Rust2Zig};
-use super::name::camel_to_snake;
 
 pub struct Capture {
     pub name: String,
@@ -31,17 +30,12 @@ impl Rust2Zig {
 
     pub fn translate_match_pat(&mut self, pat: &syn::Pat) -> Vec<Capture> {
         match pat {
-            syn::Pat::Ident(pi) => {
-                write!(self.out, "{}", self.rename_ident(&pi.ident)).unwrap();
-                Default::default()
-            }
             syn::Pat::Path(pp) => {
                 self.translate_path(&pp.path, PathMode::EnumVariant);
                 Default::default()
             }
             syn::Pat::Struct(ps) => {
-                let variant = ps.path.segments.last().unwrap().ident.to_string();
-                write!(self.out, ".{}", camel_to_snake(&variant)).unwrap();
+                self.translate_path(&ps.path, PathMode::EnumVariant);
                 let mut captures: Vec<Capture> = Default::default();
                 for field in &ps.fields {
                     if let syn::Member::Named(ident) = &field.member {
@@ -57,8 +51,7 @@ impl Rust2Zig {
                 captures
             }
             syn::Pat::TupleStruct(pts) => {
-                let variant = pts.path.segments.last().unwrap().ident.to_string();
-                write!(self.out, ".{}", camel_to_snake(&variant)).unwrap();
+                self.translate_path(&pts.path, PathMode::EnumVariant);
                 let mut captures: Vec<Capture> = Default::default();
                 for (i, elem) in pts.elems.iter().enumerate() {
                     if let syn::Pat::Ident(pi) = elem {
@@ -70,10 +63,6 @@ impl Rust2Zig {
                     }
                 }
                 captures
-            }
-            syn::Pat::Wild(_) => {
-                write!(self.out, "_").unwrap();
-                Default::default()
             }
             _ => {
                 write!(self.out, "/* TODO: match pat */").unwrap();
