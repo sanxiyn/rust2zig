@@ -95,20 +95,7 @@ impl Rust2Zig {
             }
         }
 
-        for i in &impls {
-            for ii in &i.items {
-                match ii {
-                    syn::ImplItem::Fn(method) => {
-                        writeln!(self.out).unwrap();
-                        self.translate_method(method);
-                    }
-                    _ => {
-                        let pad = self.pad();
-                        writeln!(self.out, "{}// TODO: impl item", pad).unwrap();
-                    }
-                }
-            }
-        }
+        self.translate_methods(&impls);
 
         if is_generic {
             self.dedent();
@@ -125,7 +112,8 @@ impl Rust2Zig {
     fn translate_struct(&mut self, s: &syn::ItemStruct) {
         let name = s.ident.to_string();
         let symbol = self.scip.symbol_at(&s.ident.span().into()).unwrap().to_string();
-        let impls = self.structs[&symbol].impls.clone();
+        let struct_ = &self.structs[&symbol];
+        let impls = struct_.impls.clone();
 
         writeln!(self.out, "const {} = struct {{", name).unwrap();
         self.indent();
@@ -144,18 +132,28 @@ impl Rust2Zig {
             writeln!(self.out, ",").unwrap();
         }
 
-        for i in &impls {
-            for ii in &i.items {
-                if let syn::ImplItem::Fn(method) = ii {
-                    writeln!(self.out).unwrap();
-                    self.translate_method(method);
-                }
-            }
-        }
+        self.translate_methods(&impls);
 
         self.dedent();
         writeln!(self.out, "}};").unwrap();
         writeln!(self.out).unwrap();
+    }
+
+    fn translate_methods(&mut self, impls: &[syn::ItemImpl]) {
+        for i in impls {
+            for ii in &i.items {
+                match ii {
+                    syn::ImplItem::Fn(method) => {
+                        writeln!(self.out).unwrap();
+                        self.translate_method(method);
+                    }
+                    _ => {
+                        let pad = self.pad();
+                        writeln!(self.out, "{}// TODO: impl item", pad).unwrap();
+                    }
+                }
+            }
+        }
     }
 
     fn translate_method(&mut self, method: &syn::ImplItemFn) {

@@ -60,6 +60,18 @@ impl Rust2Zig {
         }
     }
 
+    fn indent(&mut self) {
+        self.indent += INDENT_SIZE;
+    }
+
+    fn dedent(&mut self) {
+        self.indent -= INDENT_SIZE;
+    }
+
+    fn pad(&self) -> String {
+        " ".repeat(self.indent)
+    }
+
     pub fn check_moniker(&self, path: &syn::Path, expected: &str) -> bool {
         let ident = &path.segments.last().unwrap().ident;
         self.check_moniker_ident(ident, expected)
@@ -82,18 +94,6 @@ impl Rust2Zig {
             _ => return false,
         };
         symbol.ends_with(suffix)
-    }
-
-    fn indent(&mut self) {
-        self.indent += INDENT_SIZE;
-    }
-
-    fn dedent(&mut self) {
-        self.indent -= INDENT_SIZE;
-    }
-
-    fn pad(&self) -> String {
-        " ".repeat(self.indent)
     }
 
     pub fn analyze(&mut self, file: &syn::File) {

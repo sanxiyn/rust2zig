@@ -106,9 +106,9 @@ impl Rust2Zig {
             let pad = self.pad();
             writeln!(self.out, "{}{}", pad, line).unwrap();
         }
-        let stmts = &block.stmts;
-        for (i, stmt) in stmts.iter().enumerate() {
-            let is_last = i == stmts.len() - 1;
+        let count = block.stmts.len();
+        for (i, stmt) in block.stmts.iter().enumerate() {
+            let is_last = i + 1 == count;
             self.translate_stmt(stmt, is_last);
         }
         self.dedent();
