@@ -1,5 +1,5 @@
+use std::cell::RefCell;
 use std::collections::HashMap;
-use std::fmt::Write;
 
 mod call;
 mod closure;
@@ -8,18 +8,15 @@ mod flow;
 mod generic;
 mod item;
 mod mac;
-mod name;
 mod pat;
 mod rename;
 mod stmt;
 mod ty;
-pub mod zig;
 
+use crate::ast::zig::Node;
 use crate::scip::{Kind, Scip};
+use crate::translate::name::{camel_to_snake, snake_to_camel};
 use generic::GenericFn;
-use name::{camel_to_snake, snake_to_camel};
-
-const INDENT_SIZE: usize = 4;
 
 pub enum PathMode {
     Normal,
@@ -32,45 +29,28 @@ pub struct Struct {
 
 pub struct Enum {
     pub has_data: bool,
-    pub is_generic: bool,
     pub impls: Vec<syn::ItemImpl>,
 }
 
-pub struct Rust2Zig {
+pub struct Translator {
     pub structs: HashMap<String, Struct>,
     pub enums: HashMap<String, Enum>,
     pub generic_fns: HashMap<String, GenericFn>,
     pub renames: HashMap<String, String>,
-    pub capture_stack: Vec<HashMap<String, String>>,
+    pub capture_stack: RefCell<Vec<HashMap<String, String>>>,
     pub scip: Scip,
-    out: String,
-    indent: usize,
 }
 
-impl Rust2Zig {
+impl Translator {
     pub fn new(scip: Scip) -> Self {
-        Rust2Zig {
+        Translator {
             structs: Default::default(),
             enums: Default::default(),
             generic_fns: Default::default(),
             renames: Default::default(),
             capture_stack: Default::default(),
             scip,
-            out: Default::default(),
-            indent: Default::default(),
         }
-    }
-
-    fn indent(&mut self) {
-        self.indent += INDENT_SIZE;
-    }
-
-    fn dedent(&mut self) {
-        self.indent -= INDENT_SIZE;
-    }
-
-    fn pad(&self) -> String {
-        " ".repeat(self.indent)
     }
 
     pub fn check_moniker(&self, path: &syn::Path, expected: &str) -> bool {
@@ -104,8 +84,7 @@ impl Rust2Zig {
                     let Some(symbol) = self.scip.symbol_at(&e.ident.span().into()) else { continue };
                     let symbol = symbol.to_string();
                     let has_data = e.variants.iter().any(|v| !v.fields.is_empty());
-                    let is_generic = !e.generics.params.is_empty();
-                    self.enums.insert(symbol, Enum { has_data, is_generic, impls: Default::default() });
+                    self.enums.insert(symbol, Enum { has_data, impls: Default::default() });
                 }
                 syn::Item::Fn(f) => {
                     self.register_generic(&f.sig);
@@ -152,38 +131,45 @@ impl Rust2Zig {
         }
     }
 
-    pub fn translate_file(&mut self, file: &syn::File) -> String {
-        self.out.clear();
-        writeln!(self.out, "const std = @import(\"std\");").unwrap();
-        writeln!(self.out).unwrap();
+    pub fn translate_file(&self, file: &syn::File) -> Node {
+        let mut items = vec![Node::SimpleVarDecl {
+            is_const: true,
+            name: "std".to_string(),
+            ty: None,
+            expr: Some(Box::new(Node::BuiltinCall(
+                "import".to_string(),
+                vec![Node::StringLiteral("std".to_string())],
+            ))),
+        }];
         for item in &file.items {
-            self.translate_item(item);
+            if let Some(node) = self.translate_item(item) {
+                items.push(node);
+            }
         }
-        std::mem::take(&mut self.out)
+        Node::Root(items)
     }
 
-    pub fn translate_path(&mut self, path: &syn::Path, mode: PathMode) {
+    pub fn translate_path(&self, path: &syn::Path, mode: PathMode) -> Node {
         let ident = &path.segments.last().unwrap().ident;
         match mode {
             PathMode::Normal => {
                 let kind = self.scip.kind_at(&ident.span().into());
                 if matches!(kind, Some(Kind::Parameter) | Some(Kind::Variable)) {
-                    if let Some(map) = self.capture_stack.last() {
+                    if let Some(map) = self.capture_stack.borrow().last() {
                         if let Some(symbol) = self.scip.symbol_at(&ident.span().into()) {
                             if let Some(field) = map.get(symbol) {
-                                write!(self.out, "self.{}", field).unwrap();
-                                return;
+                                return Node::FieldAccess(Box::new(Node::Identifier("self".to_string())), field.clone());
                             }
                         }
                     }
                     let name = self.rename_ident(ident);
-                    write!(self.out, "{}", name).unwrap();
+                    Node::Identifier(name)
                 } else {
-                    write!(self.out, "{}", snake_to_camel(&ident.to_string())).unwrap();
+                    Node::Identifier(snake_to_camel(&ident.to_string()))
                 }
             }
             PathMode::EnumVariant => {
-                write!(self.out, ".{}", camel_to_snake(&ident.to_string())).unwrap();
+                Node::EnumLiteral(camel_to_snake(&ident.to_string()))
             }
         }
     }

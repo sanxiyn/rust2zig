@@ -22,7 +22,7 @@ for dir in $dirs; do
         echo "SKIP $name (no expected output)"
         continue
     fi
-    cargo run --quiet -- "$dir" > "/tmp/rust2zig_${name}.zig"
+    cargo run --quiet -- new "$dir" > "/tmp/rust2zig_${name}.zig"
     if diff -q "$expected" "/tmp/rust2zig_${name}.zig" > /dev/null 2>&1; then
         echo "PASS $name"
         pass=$((pass + 1))

@@ -1,0 +1,20 @@
+First, read README.md.
+I find the current design unfortunate in that all translation is done with side effect by writing to out. Ideally, we'd have Zig AST and translation would take Rust syn AST and return Zig AST, and then we'd print Zig AST. In translate_for_range, we use take/replace because translate_type doesn't return anything. Does that make sense?
+Let's start by defining Zig AST. I think we should take inspirations from std.zig.Ast. It is an AST definition known to work for Zig, no need to reinvent the wheel. (But then, Rust is not Zig, so adaptation is necessary. But we'd want to reuse names and structures.) I copied Ast.zig from Zig 0.16.0 for you. (Warning: large file.) We will do this in stages. Let's draft Zig AST just enough to do gcd example. Put it on src/ast/zig.rs.
+Let's write the printer to src/print/zig.rs.
+We will do examples one by one. Instead of rust2zig rust/gcd, rust2zig old rust/gcd will use old string-based translator, and rust2zig new rust/gcd will use new AST-based translator. Keep the list of migrated examples in test.sh and run old/new accordingly. Put the new translator under src/translate/zig, and mirror the structure of the old translator. Implement just enough to pass gcd test. Go!
+Now do div.
+Now do divmod.
+Now do direction.
+Now do ratio.
+Now do sum.
+Now do inc.
+Now do geometry.
+Now do geometry2.
+Now do min.
+Now do iter.
+Now do dot.
+Now do closure.
+Now do result.
+Now do option.
+Now we are all migrated, always use new mode in test.sh.
