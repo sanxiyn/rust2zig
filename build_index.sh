@@ -11,7 +11,5 @@ else
 fi
 
 for dir in $dirs; do
-    name=$(basename "$dir")
-    (cd "$dir" && rust-analyzer lsif . > "$name.lsif")
     (cd "$dir" && rust-analyzer scip .)
 done

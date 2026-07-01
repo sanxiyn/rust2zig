@@ -22,16 +22,18 @@ for dir in $dirs; do
         echo "SKIP $name (no expected output)"
         continue
     fi
-    cargo run --quiet -- new "$dir" > "/tmp/rust2zig_${name}.zig"
-    if diff -q "$expected" "/tmp/rust2zig_${name}.zig" > /dev/null 2>&1; then
+    target="/tmp/rust2zig_${name}"
+    cargo run --quiet -- zig "$dir" "$target"
+    actual="${target}/${name}.zig"
+    if diff -q "$expected" "$actual" > /dev/null 2>&1; then
         echo "PASS $name"
         pass=$((pass + 1))
     else
         echo "FAIL $name"
-        diff -u "$expected" "/tmp/rust2zig_${name}.zig" || true
+        diff -u "$expected" "$actual" || true
         fail=$((fail + 1))
     fi
-    rm -f "/tmp/rust2zig_${name}.zig"
+    rm -rf "$target"
 done
 
 echo "$pass passed, $fail failed"
