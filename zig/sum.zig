@@ -53,4 +53,3 @@ test "sum_odd" {
     const xs: [5]i32 = .{ 1, 2, 3, 4, 5 };
     try std.testing.expectEqual(9, sumOdd(&xs));
 }
-

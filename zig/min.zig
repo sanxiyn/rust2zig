@@ -14,4 +14,3 @@ test "min" {
     try std.testing.expectEqual(2, min(i32, a, b));
     try std.testing.expectEqual(2, min(i32, b, a));
 }
-

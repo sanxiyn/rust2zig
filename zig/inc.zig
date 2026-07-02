@@ -14,4 +14,3 @@ test "inc" {
     inc(&x);
     try std.testing.expectEqual(succ(&y), x);
 }
-

@@ -35,4 +35,3 @@ test "ratio" {
     try std.testing.expectEqual(2, d.num);
     try std.testing.expectEqual(3, d.denom);
 }
-

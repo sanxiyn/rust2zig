@@ -20,4 +20,3 @@ test "capture" {
     }{ .a = a };
     try std.testing.expectEqual(6, add.call(3));
 }
-

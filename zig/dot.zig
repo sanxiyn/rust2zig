@@ -13,4 +13,3 @@ test "dot" {
     const b: [3]i32 = .{ 4, 5, 6 };
     try std.testing.expectEqual(32, dot(&a, &b));
 }
-

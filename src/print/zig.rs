@@ -10,9 +10,11 @@ pub fn print(node: &Node) -> String {
     let Node::Root(items) = node else {
         panic!("print expects a Root node");
     };
-    for item in items {
+    for (i, item) in items.iter().enumerate() {
+        if i > 0 {
+            printer.out.push('\n');
+        }
         printer.decl(item);
-        printer.out.push('\n');
     }
     printer.out
 }

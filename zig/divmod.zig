@@ -9,4 +9,3 @@ test "divmod" {
     try std.testing.expectEqual(2, q);
     try std.testing.expectEqual(1, r);
 }
-

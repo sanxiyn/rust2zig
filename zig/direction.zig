@@ -22,4 +22,3 @@ test "direction" {
     try std.testing.expectEqual(.north, opposite(.south));
     try std.testing.expectEqual(.east, opposite(.west));
 }
-

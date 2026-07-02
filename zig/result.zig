@@ -29,4 +29,3 @@ test "result" {
     try std.testing.expectEqual(true, x.isOk());
     try std.testing.expectEqual(true, y.isErr());
 }
-

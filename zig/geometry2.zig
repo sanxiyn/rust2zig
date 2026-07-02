@@ -84,4 +84,3 @@ test "bounding_box_circle" {
     try std.testing.expectEqual(3, x1);
     try std.testing.expectEqual(3, y1);
 }
-

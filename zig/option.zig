@@ -46,4 +46,3 @@ test "option" {
     const z: Option(i32) = .{ .some = 7 };
     try std.testing.expectEqual(true, y.@"and"(i32, z).isNone());
 }
-

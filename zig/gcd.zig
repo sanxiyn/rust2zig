@@ -14,4 +14,3 @@ fn gcd(_a: u32, _b: u32) u32 {
 test "gcd" {
     try std.testing.expectEqual(2, gcd(16, 10));
 }
-

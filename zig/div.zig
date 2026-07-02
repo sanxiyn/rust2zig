@@ -25,4 +25,3 @@ test "div2" {
     try std.testing.expectEqual(2, div2(6, 3));
     try std.testing.expectEqual(0, div2(7, 3));
 }
-

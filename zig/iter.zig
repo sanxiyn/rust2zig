@@ -39,4 +39,3 @@ test "position2" {
     const v2: i32 = 6;
     try std.testing.expectEqual(null, position2(i32, l, v2));
 }
-
