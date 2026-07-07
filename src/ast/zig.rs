@@ -14,7 +14,7 @@ pub enum Node {
     /// .assign_add
     AssignAdd(Box<Node>, Box<Node>),
     /// .assign_destructure
-    AssignDestructure(Vec<String>, Box<Node>),
+    AssignDestructure(Vec<Var>, Box<Node>),
     /// .assign_div
     AssignDiv(Box<Node>, Box<Node>),
     /// .assign_mod
@@ -121,9 +121,7 @@ pub enum Node {
     TestDecl(Option<String>, Box<Node>),
     /// .simple_var_decl
     SimpleVarDecl {
-        is_const: bool,
-        name: String,
-        ty: Option<Box<Node>>,
+        var: Var,
         expr: Option<Box<Node>>,
     },
 
@@ -180,4 +178,10 @@ pub struct SwitchArm {
 pub enum SwitchBody {
     Expr(Node),
     Block { bindings: Vec<Node>, result: Node },
+}
+
+pub struct Var {
+    pub is_const: bool,
+    pub name: String,
+    pub ty: Option<Box<Node>>,
 }

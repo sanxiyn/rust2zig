@@ -13,7 +13,7 @@ mod rename;
 mod stmt;
 mod ty;
 
-use crate::ast::zig::Node;
+use crate::ast::zig::{Node, Var};
 use crate::scip::{Kind, Scip};
 use crate::translate::name::{camel_to_snake, snake_to_camel};
 use generic::GenericFn;
@@ -133,9 +133,7 @@ impl Translator {
 
     pub fn translate_file(&self, file: &syn::File) -> Node {
         let mut items = vec![Node::SimpleVarDecl {
-            is_const: true,
-            name: "std".to_string(),
-            ty: None,
+            var: Var { is_const: true, name: "std".to_string(), ty: None },
             expr: Some(Box::new(Node::BuiltinCall(
                 "import".to_string(),
                 vec![Node::StringLiteral("std".to_string())],

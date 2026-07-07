@@ -1,4 +1,4 @@
-use crate::ast::zig::Node;
+use crate::ast::zig::{Node, Var};
 use super::Translator;
 
 impl Translator {
@@ -21,12 +21,12 @@ impl Translator {
 
     fn translate_local(&self, local: &syn::Local) -> Node {
         if let syn::Pat::Tuple(pt) = &local.pat {
-            let names = pt.elems.iter().map(|elem| match elem {
-                syn::Pat::Ident(pi) => self.rename_ident(&pi.ident),
-                _ => "_".to_string(),
+            let vars = pt.elems.iter().map(|elem| match elem {
+                syn::Pat::Ident(pi) => self.var_of(pi),
+                _ => Var { is_const: true, name: "_".to_string(), ty: None },
             }).collect();
             let expr = self.translate_expr(&local.init.as_ref().unwrap().expr);
-            return Node::AssignDestructure(names, Box::new(expr));
+            return Node::AssignDestructure(vars, Box::new(expr));
         }
         let pat = match &local.pat {
             syn::Pat::Type(pt) => &*pt.pat,
@@ -40,6 +40,11 @@ impl Translator {
                 return self.translate_closure_local(pi, ec);
             }
         }
+        let expr = self.translate_expr(&local.init.as_ref().unwrap().expr);
+        Node::SimpleVarDecl { var: self.var_of(pi), expr: Some(Box::new(expr)) }
+    }
+
+    fn var_of(&self, pi: &syn::PatIdent) -> Var {
         let is_const = pi.mutability.is_none();
         let name = self.rename_ident(&pi.ident);
         let ty = if let Some(ty) = self.scip.type_at(&pi.ident.span().into()) {
@@ -48,8 +53,7 @@ impl Translator {
         } else {
             None
         };
-        let expr = self.translate_expr(&local.init.as_ref().unwrap().expr);
-        Node::SimpleVarDecl { is_const, name, ty, expr: Some(Box::new(expr)) }
+        Var { is_const, name, ty }
     }
 
     pub fn translate_block(&self, block: &syn::Block) -> Node {

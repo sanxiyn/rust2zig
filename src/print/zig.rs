@@ -1,4 +1,4 @@
-use crate::ast::zig::{EnumVariant, Field, Node, Param, SwitchArm, SwitchBody};
+use crate::ast::zig::{EnumVariant, Field, Node, Param, SwitchArm, SwitchBody, Var};
 
 const INDENT_SIZE: usize = 4;
 
@@ -47,8 +47,8 @@ impl Printer {
                 self.block(body);
                 self.out.push('\n');
             }
-            Node::SimpleVarDecl { is_const, name, ty, expr } => {
-                self.simple_var_decl(*is_const, name, ty.as_deref(), expr.as_deref());
+            Node::SimpleVarDecl { var, expr } => {
+                self.simple_var_decl(var, expr.as_deref());
             }
             Node::EnumDecl { name, type_params, is_union, variants, methods } => {
                 let keyword = if *is_union { "union(enum)" } else { "enum" };
@@ -132,13 +132,13 @@ impl Printer {
     fn stmt(&mut self, node: &Node) {
         let pad = self.pad();
         match node {
-            Node::SimpleVarDecl { is_const, name, ty, expr } => {
-                self.simple_var_decl(*is_const, name, ty.as_deref(), expr.as_deref());
+            Node::SimpleVarDecl { var, expr } => {
+                self.simple_var_decl(var, expr.as_deref());
             }
-            Node::AssignDestructure(names, expr) => {
-                let vars: Vec<String> = names.iter().map(|name| format!("const {}", name)).collect();
+            Node::AssignDestructure(vars, expr) => {
+                let protos: Vec<String> = vars.iter().map(|var| self.var_proto(var)).collect();
                 let expr = self.expr(expr);
-                self.out.push_str(&format!("{}{} = {};\n", pad, vars.join(", "), expr));
+                self.out.push_str(&format!("{}{} = {};\n", pad, protos.join(", "), expr));
             }
             Node::Return(expr) => match expr {
                 Some(expr) => {
@@ -179,13 +179,18 @@ impl Printer {
         }
     }
 
-    fn simple_var_decl(&mut self, is_const: bool, name: &str, ty: Option<&Node>, expr: Option<&Node>) {
-        let keyword = if is_const { "const" } else { "var" };
-        self.out.push_str(&format!("{}{} {}", self.pad(), keyword, name));
-        if let Some(ty) = ty {
-            let ty = self.expr(ty);
-            self.out.push_str(&format!(": {}", ty));
+    fn var_proto(&self, var: &Var) -> String {
+        let keyword = if var.is_const { "const" } else { "var" };
+        let mut proto = format!("{} {}", keyword, var.name);
+        if let Some(ty) = &var.ty {
+            proto.push_str(&format!(": {}", self.expr(ty)));
         }
+        proto
+    }
+
+    fn simple_var_decl(&mut self, var: &Var, expr: Option<&Node>) {
+        let proto = self.var_proto(var);
+        self.out.push_str(&format!("{}{}", self.pad(), proto));
         if let Some(expr) = expr {
             self.out.push_str(" = ");
             self.value(expr);

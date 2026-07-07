@@ -1,4 +1,4 @@
-use crate::ast::zig::{Capture, Node};
+use crate::ast::zig::{Capture, Node, Var};
 use super::Translator;
 
 impl Translator {
@@ -79,18 +79,14 @@ impl Translator {
         let ty = self.scip.type_at(&pi.ident.span().into());
         let preamble = match ty {
             Some(ty) => Node::SimpleVarDecl {
-                is_const: true,
-                name: name.clone(),
-                ty: Some(Box::new(self.translate_type(&ty))),
+                var: Var { is_const: true, name: name.clone(), ty: Some(Box::new(self.translate_type(&ty))) },
                 expr: Some(Box::new(Node::BuiltinCall(
                     "intCast".to_string(),
                     vec![Node::Identifier(format!("_{name}"))],
                 ))),
             },
             None => Node::SimpleVarDecl {
-                is_const: true,
-                name: name.clone(),
-                ty: None,
+                var: Var { is_const: true, name: name.clone(), ty: None },
                 expr: Some(Box::new(Node::Identifier(format!("_{name}")))),
             },
         };

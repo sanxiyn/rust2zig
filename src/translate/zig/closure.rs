@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::ast::zig::{Field, Node, Param};
+use crate::ast::zig::{Field, Node, Param, Var};
 use crate::scip::{Kind, Range, Scip};
 use super::Translator;
 
@@ -106,9 +106,7 @@ impl Translator {
         };
         self.capture_stack.borrow_mut().pop();
         Node::SimpleVarDecl {
-            is_const: true,
-            name,
-            ty: None,
+            var: Var { is_const: true, name, ty: None },
             expr: Some(Box::new(Node::Closure {
                 captures: capture_fields,
                 has_self,

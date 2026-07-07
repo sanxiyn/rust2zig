@@ -1,4 +1,4 @@
-use crate::ast::zig::{EnumVariant, Field, Node, Param};
+use crate::ast::zig::{EnumVariant, Field, Node, Param, Var};
 use crate::translate::name::{camel_to_snake, escape_zig, snake_to_camel};
 use super::Translator;
 
@@ -120,9 +120,7 @@ impl Translator {
         params.extend(f.sig.inputs.iter().filter_map(|arg| self.translate_fn_arg(arg, &mut_params)));
         let return_type = Box::new(self.translate_return_type(&f.sig.output));
         let preamble: Vec<Node> = mut_params.iter().map(|name| Node::SimpleVarDecl {
-            is_const: false,
-            name: name.clone(),
-            ty: None,
+            var: Var { is_const: false, name: name.clone(), ty: None },
             expr: Some(Box::new(Node::Identifier(format!("_{name}")))),
         }).collect();
         let body = Box::new(self.translate_block_with_preamble(&f.block, preamble));

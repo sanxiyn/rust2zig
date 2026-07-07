@@ -1,4 +1,4 @@
-use crate::ast::zig::{Capture, Node, SwitchArm, SwitchBody};
+use crate::ast::zig::{Capture, Node, SwitchArm, SwitchBody, Var};
 use crate::translate::name::camel_to_snake;
 use super::{PathMode, Translator};
 use super::pat::Accessor;
@@ -160,7 +160,7 @@ impl Translator {
                 if capture.by_ref {
                     access = Node::AddressOf(Box::new(access));
                 }
-                Node::SimpleVarDecl { is_const: true, name: capture.name.clone(), ty: None, expr: Some(Box::new(access)) }
+                Node::SimpleVarDecl { var: Var { is_const: true, name: capture.name.clone(), ty: None }, expr: Some(Box::new(access)) }
             }).collect();
             SwitchArm {
                 pattern,
