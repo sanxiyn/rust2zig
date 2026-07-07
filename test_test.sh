@@ -17,6 +17,7 @@ for dir in $dirs; do
     name=$(basename "$dir")
     rust_dir="rust/${name}"
     zig_file="zig/${name}.zig"
+    ml_dir="ml/${name}"
 
     # Test Rust
     if (cd "$rust_dir" && cargo test --quiet) > /dev/null 2>&1; then
@@ -30,13 +31,22 @@ for dir in $dirs; do
     # Test Zig
     if [ ! -f "$zig_file" ]; then
         echo "SKIP $name (no zig output)"
-        continue
-    fi
-    if zig test "$zig_file" > /dev/null 2>&1; then
+    elif zig test "$zig_file" > /dev/null 2>&1; then
         echo "PASS $name (zig)"
         pass=$((pass + 1))
     else
         echo "FAIL $name (zig)"
+        fail=$((fail + 1))
+    fi
+
+    # Test OCaml
+    if [ ! -d "$ml_dir" ]; then
+        echo "SKIP $name (no ml output)"
+    elif (cd "$ml_dir" && dune runtest) > /dev/null 2>&1; then
+        echo "PASS $name (ml)"
+        pass=$((pass + 1))
+    else
+        echo "FAIL $name (ml)"
         fail=$((fail + 1))
     fi
 done

@@ -14,20 +14,19 @@ fi
 
 for name in $names; do
     source="rust/${name}"
-    expected="zig/${name}.zig"
-    if [ ! -f "$expected" ]; then
+    expected="ml/${name}"
+    if [ ! -d "$expected" ]; then
         echo "SKIP $name (no expected output)"
         continue
     fi
-    target="/tmp/rust2_zig_${name}"
-    cargo run --quiet -- zig "$source" "$target"
-    actual="${target}/${name}.zig"
-    if diff -q "$expected" "$actual" > /dev/null 2>&1; then
+    target="/tmp/rust2_ml_${name}"
+    cargo run --quiet -- ml "$source" "$target"
+    if diff -ru -X .gitignore "$expected" "$target" > /dev/null 2>&1; then
         echo "PASS $name"
         pass=$((pass + 1))
     else
         echo "FAIL $name"
-        diff -u "$expected" "$actual" || true
+        diff -ru -X .gitignore "$expected" "$target" || true
         fail=$((fail + 1))
     fi
     rm -rf "$target"
