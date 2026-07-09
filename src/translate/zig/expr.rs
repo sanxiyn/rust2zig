@@ -9,6 +9,7 @@ impl Translator {
             syn::Expr::Array(ea) => self.translate_array(ea),
             syn::Expr::Assign(ea) => self.translate_assign(ea),
             syn::Expr::Binary(eb) => self.translate_binary(eb),
+            syn::Expr::Block(eb) => self.translate_block_expr(&eb.block),
             syn::Expr::Break(eb) => self.translate_break(eb),
             syn::Expr::Call(ec) => self.translate_call(ec),
             syn::Expr::Continue(ec) => self.translate_continue(ec),
@@ -34,10 +35,12 @@ impl Translator {
                 }
             }
             syn::Expr::Reference(er) => self.translate_reference(er),
+            syn::Expr::Repeat(er) => self.translate_repeat(er),
             syn::Expr::Return(er) => self.translate_return(er),
             syn::Expr::Struct(es) => self.translate_struct_expr(es),
             syn::Expr::Tuple(et) => self.translate_tuple(et),
             syn::Expr::Unary(eu) => self.translate_unary(eu),
+            syn::Expr::Unsafe(eu) => self.translate_block_expr(&eu.block),
             syn::Expr::While(ew) => self.translate_while(ew),
             _ => {
                 Node::Todo("expr".to_string())
@@ -144,9 +147,11 @@ impl Translator {
         let by_ref = captures.iter().any(|capture| capture.by_ref);
         let use_block = captures.len() > 1
             || captures.iter().any(|capture| matches!(capture.accessor, Accessor::Field(_)));
+        let clears = self.prelude_clear_flags(&arm.body);
+        let result = self.translate_expr(&arm.body);
         if use_block {
             let payload = format!("_{}", variant.unwrap());
-            let bindings = captures.iter().map(|capture| {
+            let mut bindings: Vec<Node> = captures.iter().map(|capture| {
                 let mut access = match &capture.accessor {
                     Accessor::Index(index) => Node::ArrayAccess(
                         Box::new(Node::Identifier(payload.clone())),
@@ -162,20 +167,34 @@ impl Translator {
                 }
                 Node::SimpleVarDecl { var: Var { is_const: true, name: capture.name.clone(), ty: None }, expr: Some(Box::new(access)) }
             }).collect();
+            bindings.extend(clears);
             SwitchArm {
                 pattern,
                 capture: Some(Capture { name: payload, by_ref }),
-                body: SwitchBody::Block { bindings, result: self.translate_expr(&arm.body) },
+                body: SwitchBody::Block { bindings, result },
+            }
+        } else if !clears.is_empty() {
+            let capture = captures.first().map(|capture| Capture { name: capture.name.clone(), by_ref });
+            SwitchArm {
+                pattern,
+                capture,
+                body: SwitchBody::Block { bindings: clears, result },
             }
         } else {
             let capture = captures.first().map(|capture| Capture { name: capture.name.clone(), by_ref });
-            SwitchArm { pattern, capture, body: SwitchBody::Expr(self.translate_expr(&arm.body)) }
+            SwitchArm { pattern, capture, body: SwitchBody::Expr(result) }
         }
     }
 
     fn translate_reference(&self, er: &syn::ExprReference) -> Node {
         let expr = self.translate_expr(&er.expr);
         Node::AddressOf(Box::new(expr))
+    }
+
+    fn translate_repeat(&self, er: &syn::ExprRepeat) -> Node {
+        let value = self.translate_expr(&er.expr);
+        let len = self.translate_expr(&er.len);
+        Node::ArrayRepeat(Box::new(value), Box::new(len))
     }
 
     fn translate_return(&self, er: &syn::ExprReturn) -> Node {

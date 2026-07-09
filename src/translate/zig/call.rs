@@ -12,6 +12,13 @@ impl Translator {
             if self.check_moniker(&ep.path, "core::option::Option::Some") {
                 return self.translate_expr(&ec.args[0]);
             }
+            if self.check_moniker(&ep.path, "core::mem::drop") {
+                let arg = self.translate_expr(&ec.args[0]);
+                return Node::Call(
+                    Box::new(Node::FieldAccess(Box::new(arg), "drop".to_string())),
+                    vec![],
+                );
+            }
         }
         let func = self.translate_callee(&ec.func);
         let mut args = self.generic_type_args(&ec.func, &ec.args);

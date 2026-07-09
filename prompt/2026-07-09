@@ -1,0 +1,22 @@
+Explore the project and give me a summary.
+What is missing for becoming a full Rust frontend?
+The point that a "full" frontend needs diagnostics etc is well taken, but let's say users are expected to run rustc for development and only run rust2zig at the end at known to be good source. This also justifies erasing lifetime since it is purely compile time. As for standard library, the obvious idea is to also translate standard library itself.
+I am strongly resistant to moving to MIR because it will lose all high level information. This project's research goal is to see whether "generic as comptime" without monomorphization is feasible and it seems to be so far. What do we get from MIR? Is it mostly drop elaboration?
+How complex is drop elaboration? In principle, it is desugaring. Can we implement it as another desugar pass? (We already desugar match ergonomics.)
+Let's write some drop example to rust/drop for level 1 (no conditional drop).
+Propose how it should be translated, write to zig/drop.zig.
+Field/method name clash is a separate bug that is not essential. Why does Ticket need a trivial getter anyway? Ticket.id is public. Get rid of the getter in the Rust reference and adjust Zig accordingly.
+syn doesn't preserve comments does it? rust/drop and zig/drop.zig are not just examples, they are translation input and output and will be compared byte for byte. Since we won't deal with comments in this session, just get rid of all comments.
+Write out how it should be desugared to desugar/drop.
+Doesn't "drop elaboration as desugaring pass" conflict with "we will use Zig defer for Rust drop"?
+For level 1 work, let's assume all drops are not conditional in input, skip desugar for now, and translate on that basis to Zig defer. Does that sound right?
+Let's implement it.
+We have protobuf installed, and scip.proto under proto. Use this command to inspect SCIP index: protoc -I proto --decode scip.Index scip.proto < rust/drop/index.scip.
+We should pre-compute local_drop_info in analyze. struct DropInfo { is_moved_in: bool, has_drop_call: bool }, drop_infos: HashMap<String, DropInfo> keyed by SCIP symbol, etc.
+Can't we make both stmt_moves_ident and stmt_has_drop_call a visit instead of recursing?
+How do you think things are going so far?
+Let's work on level 2: conditional drop but not partial drop, without loops (loops are level 3, partial drops are level 4). First write an example to rust/drop2.
+Propose how it should be translated, write to zig/drop2.zig.
+Looks good to me. We should detect when drops are unconditional and should not introduce flags in those cases. Let's implement it.
+How do you think things are going so far?
+We will stop here for today. Write out the current status and remaining roadmap to DROP.md.

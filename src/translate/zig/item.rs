@@ -8,6 +8,7 @@ impl Translator {
             syn::Item::Enum(e) => Some(self.translate_enum(e)),
             syn::Item::Struct(s) => Some(self.translate_struct(s)),
             syn::Item::Fn(f) => Some(self.translate_fn(f)),
+            syn::Item::Static(s) => Some(self.translate_static(s)),
             _ => None,
         }
     }
@@ -104,25 +105,48 @@ impl Translator {
             return self.translate_test(f);
         }
 
-        let mut mut_params: Vec<String> = Default::default();
+        let mut rebind_params: Vec<(String, bool, bool)> = Default::default();
         for arg in &f.sig.inputs {
             if let syn::FnArg::Typed(pat_type) = arg {
                 if let syn::Pat::Ident(pi) = &*pat_type.pat {
+                    let name = self.rename_ident(&pi.ident);
                     if pi.mutability.is_some() {
-                        mut_params.push(self.rename_ident(&pi.ident));
+                        rebind_params.push((name, false, false));
+                    } else {
+                        let (needs_var, needs_defer, needs_flag) = self.local_drop_flags(&pi.ident);
+                        if needs_var {
+                            rebind_params.push((name, needs_defer, needs_flag));
+                        }
                     }
                 }
             }
         }
 
         let name = escape_zig(&snake_to_camel(&f.sig.ident.to_string()));
+        let rebind_names: Vec<String> = rebind_params.iter().map(|(n, _, _)| n.clone()).collect();
         let mut params = self.comptime_params(&f.sig.ident);
-        params.extend(f.sig.inputs.iter().filter_map(|arg| self.translate_fn_arg(arg, &mut_params)));
+        params.extend(f.sig.inputs.iter().filter_map(|arg| self.translate_fn_arg(arg, &rebind_names)));
         let return_type = Box::new(self.translate_return_type(&f.sig.output));
-        let preamble: Vec<Node> = mut_params.iter().map(|name| Node::SimpleVarDecl {
-            var: Var { is_const: false, name: name.clone(), ty: None },
-            expr: Some(Box::new(Node::Identifier(format!("_{name}")))),
-        }).collect();
+        let mut preamble: Vec<Node> = Vec::new();
+        for (name, needs_defer, needs_flag) in &rebind_params {
+            preamble.push(Node::SimpleVarDecl {
+                var: Var { is_const: false, name: name.clone(), ty: None },
+                expr: Some(Box::new(Node::Identifier(format!("_{name}")))),
+            });
+            if *needs_flag {
+                preamble.push(Node::SimpleVarDecl {
+                    var: Var {
+                        is_const: false,
+                        name: Self::alive_name(name),
+                        ty: Some(Box::new(Node::Identifier("bool".to_string()))),
+                    },
+                    expr: Some(Box::new(Node::Identifier("true".to_string()))),
+                });
+                preamble.push(self.conditional_defer(name));
+            } else if *needs_defer {
+                preamble.push(Node::Defer(Box::new(self.drop_call(name))));
+            }
+        }
         let body = Box::new(self.translate_block_with_preamble(&f.block, preamble));
         Node::FnDecl { name, params, return_type, body }
     }
@@ -134,7 +158,7 @@ impl Translator {
         Node::TestDecl(Some(test_name), body)
     }
 
-    fn translate_fn_arg(&self, arg: &syn::FnArg, mut_params: &[String]) -> Option<Param> {
+    fn translate_fn_arg(&self, arg: &syn::FnArg, rebind_params: &[String]) -> Option<Param> {
         match arg {
             syn::FnArg::Receiver(receiver) => {
                 let self_ty = Node::Identifier("Self".to_string());
@@ -149,7 +173,7 @@ impl Translator {
             syn::FnArg::Typed(pat_type) => {
                 let name = if let syn::Pat::Ident(pi) = &*pat_type.pat {
                     let name = self.rename_ident(&pi.ident);
-                    if mut_params.contains(&name) {
+                    if rebind_params.contains(&name) {
                         format!("_{}", name)
                     } else {
                         name
@@ -169,5 +193,20 @@ impl Translator {
             name,
             ty: Node::Identifier("type".to_string()),
         }).collect()
+    }
+
+    fn translate_static(&self, s: &syn::ItemStatic) -> Node {
+        let is_const = matches!(s.mutability, syn::StaticMutability::None);
+        let name = snake_to_camel(&s.ident.to_string().to_ascii_lowercase());
+        let ty = self.translate_type(&s.ty);
+        let expr = self.translate_expr(&s.expr);
+        Node::SimpleVarDecl {
+            var: Var {
+                is_const,
+                name,
+                ty: Some(Box::new(ty)),
+            },
+            expr: Some(Box::new(expr)),
+        }
     }
 }

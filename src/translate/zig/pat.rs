@@ -56,6 +56,15 @@ impl Translator {
                 }
                 (node, captures)
             }
+            syn::Pat::Lit(pl) => {
+                let node = match &pl.lit {
+                    syn::Lit::Bool(b) => Node::Identifier(b.value.to_string()),
+                    syn::Lit::Int(i) => Node::NumberLiteral(i.base10_digits().to_string()),
+                    syn::Lit::Str(s) => Node::StringLiteral(s.value()),
+                    _ => Node::Todo("match lit".to_string()),
+                };
+                (node, Default::default())
+            }
             _ => {
                 let node = Node::Todo("match pat".to_string());
                 (node, Default::default())

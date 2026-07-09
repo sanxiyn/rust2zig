@@ -1,8 +1,9 @@
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 mod call;
 mod closure;
+mod drop;
 mod expr;
 mod flow;
 mod generic;
@@ -16,6 +17,7 @@ mod ty;
 use crate::ast::zig::{Node, Var};
 use crate::scip::{Kind, Scip};
 use crate::translate::name::{camel_to_snake, snake_to_camel};
+use drop::DropInfo;
 use generic::GenericFn;
 
 pub enum PathMode {
@@ -37,6 +39,8 @@ pub struct Translator {
     pub enums: HashMap<String, Enum>,
     pub generic_fns: HashMap<String, GenericFn>,
     pub renames: HashMap<String, String>,
+    pub drop_types: HashSet<String>,
+    pub drop_infos: HashMap<String, DropInfo>,
     pub capture_stack: RefCell<Vec<HashMap<String, String>>>,
     pub scip: Scip,
 }
@@ -48,6 +52,8 @@ impl Translator {
             enums: Default::default(),
             generic_fns: Default::default(),
             renames: Default::default(),
+            drop_types: Default::default(),
+            drop_infos: Default::default(),
             capture_stack: Default::default(),
             scip,
         }
@@ -64,6 +70,8 @@ impl Translator {
         let suffix = match expected {
             "core::iter::Iterator::enumerate" => "iter/traits/iterator/Iterator#enumerate().",
             "core::macros::assert_eq" => "macros/assert_eq!",
+            "core::mem::drop" => "mem/drop().",
+            "core::ops::drop::Drop" => "ops/drop/Drop#",
             "core::option::Option" => "option/Option#",
             "core::option::Option::Some" => "option/Option#Some#",
             "core::option::Option::None" => "option/Option#None#",
@@ -103,6 +111,11 @@ impl Translator {
                 if let syn::Type::Path(tp) = &*i.self_ty {
                     let ident = &tp.path.segments.last().unwrap().ident;
                     if let Some(symbol) = self.scip.symbol_at(&ident.span().into()) {
+                        if let Some((_, path, _)) = &i.trait_ {
+                            if self.check_moniker(path, "core::ops::drop::Drop") {
+                                self.drop_types.insert(symbol.to_string());
+                            }
+                        }
                         if let Some(s) = self.structs.get_mut(symbol) {
                             s.impls.push(i.clone());
                         } else if let Some(e) = self.enums.get_mut(symbol) {
@@ -119,6 +132,7 @@ impl Translator {
         }
 
         self.collect_renames(file);
+        self.collect_drop_infos(file);
     }
 
     pub fn path_mode(&self, path: &syn::Path) -> PathMode {
@@ -162,6 +176,14 @@ impl Translator {
                     }
                     let name = self.rename_ident(ident);
                     Node::Identifier(name)
+                } else if matches!(kind, Some(Kind::Method) | Some(Kind::StaticMethod))
+                    && path.segments.len() > 1
+                {
+                    let ty = path.segments[path.segments.len() - 2].ident.to_string();
+                    let method = snake_to_camel(&ident.to_string());
+                    Node::FieldAccess(Box::new(Node::Identifier(ty)), method)
+                } else if matches!(kind, Some(Kind::StaticVariable)) {
+                    Node::Identifier(snake_to_camel(&ident.to_string().to_ascii_lowercase()))
                 } else {
                     Node::Identifier(snake_to_camel(&ident.to_string()))
                 }
@@ -170,5 +192,15 @@ impl Translator {
                 Node::EnumLiteral(camel_to_snake(&ident.to_string()))
             }
         }
+    }
+
+    pub fn drop_call(&self, name: &str) -> Node {
+        Node::Call(
+            Box::new(Node::FieldAccess(
+                Box::new(Node::Identifier(name.to_string())),
+                "drop".to_string(),
+            )),
+            vec![],
+        )
     }
 }

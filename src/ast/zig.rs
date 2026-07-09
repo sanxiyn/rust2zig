@@ -9,6 +9,8 @@ pub enum Node {
     ArrayAccess(Box<Node>, Box<Node>),
     /// .array_init
     ArrayInit(Option<Box<Node>>, Vec<Node>),
+    /// `.{value} ** len` (Zig array splat / repeat init)
+    ArrayRepeat(Box<Node>, Box<Node>),
     /// .assign
     Assign(Box<Node>, Box<Node>),
     /// .assign_add
@@ -35,8 +37,15 @@ pub enum Node {
     Call(Box<Node>, Vec<Node>),
     /// .@"continue"
     Continue,
+    /// .@"defer"
+    Defer(Box<Node>),
     /// .deref
     Deref(Box<Node>),
+    /// labeled block used as expression: `blk: { ... break :blk result; }`
+    BlockExpr {
+        stmts: Vec<Node>,
+        result: Box<Node>,
+    },
     /// .div
     Div(Box<Node>, Box<Node>),
     /// .enum_literal

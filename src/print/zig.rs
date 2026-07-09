@@ -148,6 +148,19 @@ impl Printer {
                 }
                 None => self.out.push_str(&format!("{}return;\n", pad)),
             },
+            Node::Defer(expr) => {
+                self.out.push_str(&format!("{}defer ", pad));
+                match expr.as_ref() {
+                    Node::Block(_) => {
+                        self.block(expr);
+                        self.out.push('\n');
+                    }
+                    _ => {
+                        self.value(expr);
+                        self.out.push_str(";\n");
+                    }
+                }
+            }
 
             Node::For { iterables, captures, body } => {
                 let iterables: Vec<String> = iterables.iter().map(|i| self.expr(i)).collect();
@@ -217,11 +230,25 @@ impl Printer {
                 self.closure(captures, *has_self, params, return_type, body)
             }
             Node::Switch { cond, arms } => self.switch(cond, arms),
+            Node::BlockExpr { stmts, result } => self.block_expr(stmts, result),
             _ => {
                 let text = self.expr(node);
                 self.out.push_str(&text);
             }
         }
+    }
+
+    fn block_expr(&mut self, stmts: &[Node], result: &Node) {
+        self.out.push_str("blk: {\n");
+        self.indent();
+        for stmt in stmts {
+            self.stmt(stmt);
+        }
+        self.out.push_str(&format!("{}break :blk ", self.pad()));
+        self.value(result);
+        self.out.push_str(";\n");
+        self.dedent();
+        self.out.push_str(&format!("{}}}", self.pad()));
     }
 
     fn closure(&mut self, captures: &[Field], has_self: bool, params: &[Param], return_type: &Node, body: &Node) {
@@ -305,6 +332,9 @@ impl Printer {
                 let ty = if let Some(ty) = ty { self.expr(ty) } else { ".".to_string() };
                 let elements: Vec<String> = elements.iter().map(|e| self.expr(e)).collect();
                 format!("{}{{ {} }}", ty, elements.join(", "))
+            }
+            Node::ArrayRepeat(value, len) => {
+                format!(".{{{}}} ** {}", self.expr(value), self.expr(len))
             }
             Node::Assign(left, right) => format!("{} = {}", self.expr(left), self.expr(right)),
             Node::Break => "break".to_string(),
