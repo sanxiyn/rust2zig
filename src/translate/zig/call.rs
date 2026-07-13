@@ -1,7 +1,6 @@
 use crate::ast::zig::Node;
 use crate::translate::name::{camel_to_snake, escape_zig, snake_to_camel};
 use super::{PathMode, Translator};
-use super::generic::peel_type;
 
 impl Translator {
     pub fn translate_call(&self, ec: &syn::ExprCall) -> Node {
@@ -21,7 +20,17 @@ impl Translator {
             }
         }
         let func = self.translate_callee(&ec.func);
-        let mut args = self.generic_type_args(&ec.func, &ec.args);
+        let mut args = vec![];
+        if let syn::Expr::Path(ep) = &*ec.func {
+            let segment = ep.path.segments.last().unwrap();
+            if let syn::PathArguments::AngleBracketed(generic_args) = &segment.arguments {
+                for arg in &generic_args.args {
+                    let syn::GenericArgument::Type(ty) = arg else { continue };
+                    let arg = self.translate_type(ty);
+                    args.push(arg);
+                }
+            }
+        }
         for arg in &ec.args {
             let arg = self.translate_expr(arg);
             args.push(arg);
@@ -58,32 +67,6 @@ impl Translator {
         }
     }
 
-    fn generic_type_args(
-        &self,
-        func: &syn::Expr,
-        args: &syn::punctuated::Punctuated<syn::Expr, syn::Token![,]>,
-    ) -> Vec<Node> {
-        let syn::Expr::Path(ep) = func else { return Vec::new() };
-        self.generic_args_for(&ep.path.segments.last().unwrap().ident, args)
-    }
-
-    pub fn generic_args_for(
-        &self,
-        ident: &syn::Ident,
-        args: &syn::punctuated::Punctuated<syn::Expr, syn::Token![,]>,
-    ) -> Vec<Node> {
-        let Some(gf) = self.scip.symbol_at(&ident.span().into()).and_then(|s| self.generic_fns.get(s)) else {
-            return Vec::new();
-        };
-        gf.param_arg_index.iter().filter_map(|reference| {
-            let syn::Expr::Path(ap) = &args[reference.arg] else { return None };
-            let aident = &ap.path.segments.last().unwrap().ident;
-            let ty = self.scip.type_at(&aident.span().into())?;
-            let peeled = peel_type(&ty, &reference.path)?;
-            Some(self.translate_type(peeled))
-        }).collect()
-    }
-
     pub fn translate_method_call(&self, emc: &syn::ExprMethodCall) -> Node {
         if self.check_moniker_ident(&emc.method, "core::slice::len") {
             let base = self.translate_expr(&emc.receiver);
@@ -95,7 +78,14 @@ impl Translator {
         let base = self.translate_expr(&emc.receiver);
         let method = escape_zig(&snake_to_camel(&emc.method.to_string()));
         let func = Node::FieldAccess(Box::new(base), method);
-        let mut args = self.generic_args_for(&emc.method, &emc.args);
+        let mut args = vec![];
+        if let Some(generic_args) = &emc.turbofish {
+            for arg in &generic_args.args {
+                let syn::GenericArgument::Type(ty) = arg else { continue };
+                let arg = self.translate_type(ty);
+                args.push(arg);
+            }
+        }
         for arg in &emc.args {
             let arg = self.translate_expr(arg);
             args.push(arg);
