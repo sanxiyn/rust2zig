@@ -1,4 +1,6 @@
 mod binary;
+#[allow(unused)]
+mod compound_assignment;
 mod generic;
 mod match_ergonomics;
 
