@@ -15,6 +15,12 @@ pub enum Node {
     Assign(Box<Node>, Box<Node>),
     /// .assign_add
     AssignAdd(Box<Node>, Box<Node>),
+    /// .assign_bit_and
+    AssignBitAnd(Box<Node>, Box<Node>),
+    /// .assign_bit_or
+    AssignBitOr(Box<Node>, Box<Node>),
+    /// .assign_bit_xor
+    AssignBitXor(Box<Node>, Box<Node>),
     /// .assign_destructure
     AssignDestructure(Vec<Var>, Box<Node>),
     /// .assign_div
@@ -27,8 +33,20 @@ pub enum Node {
     AssignSub(Box<Node>, Box<Node>),
     /// .bang_equal
     BangEqual(Box<Node>, Box<Node>),
+    /// .bit_and
+    BitAnd(Box<Node>, Box<Node>),
+    /// .bit_or
+    BitOr(Box<Node>, Box<Node>),
+    /// .bit_xor
+    BitXor(Box<Node>, Box<Node>),
     /// .block
     Block(Vec<Node>),
+    /// .bool_and
+    BoolAnd(Box<Node>, Box<Node>),
+    /// .bool_not
+    BoolNot(Box<Node>),
+    /// .bool_or
+    BoolOr(Box<Node>, Box<Node>),
     /// .@"break"
     Break,
     /// .builtin_call
@@ -60,6 +78,8 @@ pub enum Node {
     GreaterOrEqual(Box<Node>, Box<Node>),
     /// .greater_than
     GreaterThan(Box<Node>, Box<Node>),
+    /// .grouped_expression
+    GroupedExpression(Box<Node>),
     /// .identifier
     Identifier(String),
     /// .less_or_equal
@@ -74,6 +94,10 @@ pub enum Node {
     NumberLiteral(String),
     /// .@"return"
     Return(Option<Box<Node>>),
+    /// .shl
+    Shl(Box<Node>, Box<Node>),
+    /// .shr
+    Shr(Box<Node>, Box<Node>),
     /// .string_literal
     StringLiteral(String),
     /// .struct_init

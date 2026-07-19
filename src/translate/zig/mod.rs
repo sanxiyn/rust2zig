@@ -78,6 +78,7 @@ impl Translator {
             "core::slice::iter" => "slice/impl#[`[T]`]iter().",
             "core::slice::len" => "slice/impl#[`[T]`]len().",
             "std::iter::zip" => "iter/adapters/zip/zip().",
+            "std::macros::assert" => "macros/builtin/assert!",
             "std::macros::panic" => "macros/panic!",
             "std::macros::println" => "macros/println!",
             _ => return false,

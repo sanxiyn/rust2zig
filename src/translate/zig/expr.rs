@@ -22,6 +22,7 @@ impl Translator {
                 .unwrap_or_else(|| Node::Todo("macro".to_string())),
             syn::Expr::Match(em) => self.translate_match(em),
             syn::Expr::MethodCall(emc) => self.translate_method_call(emc),
+            syn::Expr::Paren(ep) => self.translate_paren(ep),
             syn::Expr::Path(ep) => {
                 let mode = self.path_mode(&ep.path);
                 if matches!(mode, PathMode::EnumVariant) {
@@ -77,6 +78,13 @@ impl Translator {
         match eb.op {
             syn::BinOp::Add(_) => Node::Add(left, right),
             syn::BinOp::AddAssign(_) => Node::AssignAdd(left, right),
+            syn::BinOp::And(_) => Node::BoolAnd(left, right),
+            syn::BinOp::BitAnd(_) => Node::BitAnd(left, right),
+            syn::BinOp::BitAndAssign(_) => Node::AssignBitAnd(left, right),
+            syn::BinOp::BitOr(_) => Node::BitOr(left, right),
+            syn::BinOp::BitOrAssign(_) => Node::AssignBitOr(left, right),
+            syn::BinOp::BitXor(_) => Node::BitXor(left, right),
+            syn::BinOp::BitXorAssign(_) => Node::AssignBitXor(left, right),
             syn::BinOp::Div(_) => Node::Div(left, right),
             syn::BinOp::DivAssign(_) => Node::AssignDiv(left, right),
             syn::BinOp::Eq(_) => Node::EqualEqual(left, right),
@@ -87,8 +95,11 @@ impl Translator {
             syn::BinOp::Mul(_) => Node::Mul(left, right),
             syn::BinOp::MulAssign(_) => Node::AssignMul(left, right),
             syn::BinOp::Ne(_) => Node::BangEqual(left, right),
+            syn::BinOp::Or(_) => Node::BoolOr(left, right),
             syn::BinOp::Rem(_) => Node::Mod(left, right),
             syn::BinOp::RemAssign(_) => Node::AssignMod(left, right),
+            syn::BinOp::Shl(_) => Node::Shl(left, right),
+            syn::BinOp::Shr(_) => Node::Shr(left, right),
             syn::BinOp::Sub(_) => Node::Sub(left, right),
             syn::BinOp::SubAssign(_) => Node::AssignSub(left, right),
             _ => Node::Todo("binop".to_string()),
@@ -186,6 +197,11 @@ impl Translator {
         }
     }
 
+    fn translate_paren(&self, ep: &syn::ExprParen) -> Node {
+        let expr = self.translate_expr(&ep.expr);
+        Node::GroupedExpression(Box::new(expr))
+    }
+
     fn translate_reference(&self, er: &syn::ExprReference) -> Node {
         let expr = self.translate_expr(&er.expr);
         Node::AddressOf(Box::new(expr))
@@ -249,6 +265,10 @@ impl Translator {
             syn::UnOp::Deref(_) => {
                 let expr = self.translate_expr(&eu.expr);
                 Node::Deref(Box::new(expr))
+            }
+            syn::UnOp::Not(_) => {
+                let expr = self.translate_expr(&eu.expr);
+                Node::BoolNot(Box::new(expr))
             }
             _ => {
                 Node::Todo("unary".to_string())

@@ -307,11 +307,19 @@ impl Printer {
         match node {
             Node::Add(left, right) |
             Node::AssignAdd(left, right) |
+            Node::AssignBitAnd(left, right) |
+            Node::AssignBitOr(left, right) |
+            Node::AssignBitXor(left, right) |
             Node::AssignDiv(left, right) |
             Node::AssignMod(left, right) |
             Node::AssignMul(left, right) |
             Node::AssignSub(left, right) |
             Node::BangEqual(left, right) |
+            Node::BitAnd(left, right) |
+            Node::BitOr(left, right) |
+            Node::BitXor(left, right) |
+            Node::BoolAnd(left, right) |
+            Node::BoolOr(left, right) |
             Node::Div(left, right) |
             Node::EqualEqual(left, right) |
             Node::GreaterOrEqual(left, right) |
@@ -320,6 +328,8 @@ impl Printer {
             Node::LessThan(left, right) |
             Node::Mod(left, right) |
             Node::Mul(left, right) |
+            Node::Shl(left, right) |
+            Node::Shr(left, right) |
             Node::Sub(left, right) => {
                 let left = self.expr(left);
                 let right = self.expr(right);
@@ -337,6 +347,7 @@ impl Printer {
                 format!(".{{{}}} ** {}", self.expr(value), self.expr(len))
             }
             Node::Assign(left, right) => format!("{} = {}", self.expr(left), self.expr(right)),
+            Node::BoolNot(expr) => format!("!{}", self.expr(expr)),
             Node::Break => "break".to_string(),
             Node::BuiltinCall(name, args) => {
                 let args: Vec<String> = args.iter().map(|a| self.expr(a)).collect();
@@ -356,6 +367,7 @@ impl Printer {
                 let end = if let Some(end) = end { self.expr(end) } else { "".to_string() };
                 format!("{}..{}", start, end)
             }
+            Node::GroupedExpression(expr) => format!("({})", self.expr(expr)),
             Node::Identifier(name) => name.clone(),
             Node::NumberLiteral(text) => text.clone(),
             Node::StringLiteral(text) => format!("\"{}\"", text),
@@ -393,11 +405,19 @@ impl Printer {
         match node {
             Node::Add(..) => "+",
             Node::AssignAdd(..) => "+=",
+            Node::AssignBitAnd(..) => "&=",
+            Node::AssignBitOr(..) => "|=",
+            Node::AssignBitXor(..) => "^=",
             Node::AssignDiv(..) => "/=",
             Node::AssignMod(..) => "%=",
             Node::AssignMul(..) => "*=",
             Node::AssignSub(..) => "-=",
             Node::BangEqual(..) => "!=",
+            Node::BitAnd(..) => "&",
+            Node::BitOr(..) => "|",
+            Node::BitXor(..) => "^",
+            Node::BoolAnd(..) => "and",
+            Node::BoolOr(..) => "or",
             Node::Div(..) => "/",
             Node::EqualEqual(..) => "==",
             Node::GreaterOrEqual(..) => ">=",
@@ -406,6 +426,8 @@ impl Printer {
             Node::LessThan(..) => "<",
             Node::Mod(..) => "%",
             Node::Mul(..) => "*",
+            Node::Shl(..) => "<<",
+            Node::Shr(..) => ">>",
             Node::Sub(..) => "-",
             _ => "/* TODO: binop */",
         }
