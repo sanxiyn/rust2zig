@@ -19,7 +19,17 @@ impl Translator {
                     let expr = self.translate_expr(expr);
                     nodes.push(Node::Return(Some(Box::new(expr))));
                 } else {
-                    nodes.push(self.translate_expr(expr));
+                    let return_type = match expr {
+                        syn::Expr::MethodCall(emc) => self.scip.return_type_at(&emc.method.span().into()),
+                        _ => None,
+                    };
+                    if return_type.is_some() {
+                        let underscore = Node::Identifier("_".to_string());
+                        let expr = self.translate_expr(expr);
+                        nodes.push(Node::Assign(Box::new(underscore), Box::new(expr)));
+                    } else {
+                        nodes.push(self.translate_expr(expr));
+                    }
                 }
                 nodes
             }

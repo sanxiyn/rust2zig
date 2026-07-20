@@ -80,6 +80,35 @@ impl Scip {
         syn::parse_str(ty).ok()
     }
 
+    pub fn signature_at(&self, range: &Range) -> Option<syn::Signature> {
+        let symbol = self.symbol_at(range)?;
+        let info = self.symbol_info(symbol)?;
+        if !matches!(info.kind, Kind::Function | Kind::Method | Kind::StaticMethod) {
+            return None;
+        }
+        struct Signature {
+            #[allow(unused)]
+            visibility: syn::Visibility,
+            signature: syn::Signature,
+        }
+        impl syn::parse::Parse for Signature {
+            fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+                let visibility: syn::Visibility = input.parse()?;
+                let signature: syn::Signature = input.parse()?;
+                Ok(Self { visibility, signature })
+            }
+        }
+        let signature = info.signature.as_deref()?;
+        let signature = syn::parse_str::<Signature>(signature).ok()?;
+        Some(signature.signature)
+    }
+
+    pub fn return_type_at(&self, range: &Range) -> Option<syn::Type> {
+        let signature = self.signature_at(range)?;
+        let syn::ReturnType::Type(_, ty) = signature.output else { return None; };
+        Some(*ty)
+    }
+
     pub fn binary_type_at(&self, range: &Range) -> Option<(syn::Type, syn::Type)> {
         let symbol = self.symbol_at(range)?;
         let idx = symbol.find("/arith/impl#[")?;

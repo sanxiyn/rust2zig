@@ -30,9 +30,9 @@ const BitSet = struct {
 test "toggle" {
     var b: BitSet = BitSet.withCapacity(16);
     b.toggle(1);
-    b.put(2);
+    _ = b.put(2);
     b.toggle(2);
-    b.put(3);
+    _ = b.put(3);
     std.debug.assert(b.contains(1));
     std.debug.assert(!b.contains(2));
     std.debug.assert(b.contains(3));
