@@ -1,0 +1,16 @@
+Explore the project and give me a summary.
+This project was developed with AI assistance, and full prompt history is under prompt directory. What do you think of the history?
+This was a research so far. I decided to try it for real, so I took the code from fixedbitset crate and extracted it as a bitset example. Then I made it pass, this time without AI assistance. Those are last three commits. Have a look, and what do you think of human vs AI development, and nature of this project?
+I actually did allocation too. It's on the different branch. Want to have a look?
+Sorry, it's on a different computer. Code is being cleaned up, but I copied doc to ALLOC.md and prompt/2026-07-09-2.
+"Real" fixedbitset is still far away. It uses SIMD lol. It put things into perspective doesn't it?
+I have ambitious goals. The target is to hand .crate to rust2zig and get the buildable output. I think actual next largest gap is to handle modules and multiple files.
+I mean, just minimum viable .crate translation. So leaf crate, doesn't use macros, doesn't use features, doesn't use std (no_std, no allocation). That is still not empty, and I am sure we will discover exciting gaps (just as 40 lines bitset found 3 gaps).
+integer-sqrt is an amazing suggestion. I am fine with editing a bit: after all bitset is not fixedbitset.
+Write out the research and the plan to isqrt.md.
+Suggest other candidates.
+Write hash.md and random.md.
+This session will be pure research. I created research directory and moved isqrt/hash/random there. Write two more.
+Yes, write README for research.
+How do you think things are going so far?
+We will stop here for today. Thanks for collaboration!
