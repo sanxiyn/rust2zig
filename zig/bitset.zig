@@ -11,19 +11,19 @@ const BitSet = struct {
     }
 
     fn contains(self: *const Self, bit: usize) bool {
-        return bit < self.length and self.data & (1 << bit) != 0;
+        return bit < self.length and self.data & (@as(usize, 1) << @intCast(bit)) != 0;
     }
 
     fn put(self: *Self, bit: usize) bool {
         std.debug.assert(bit < self.length);
-        const prev: bool = self.data & (1 << bit) != 0;
-        self.data |= 1 << bit;
+        const prev: bool = self.data & (@as(usize, 1) << @intCast(bit)) != 0;
+        self.data |= @as(usize, 1) << @intCast(bit);
         return prev;
     }
 
     fn toggle(self: *Self, bit: usize) void {
         std.debug.assert(bit < self.length);
-        self.data ^= 1 << bit;
+        self.data ^= @as(usize, 1) << @intCast(bit);
     }
 };
 

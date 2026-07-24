@@ -74,7 +74,13 @@ impl Translator {
             );
         }
         let left = Box::new(self.translate_expr(&eb.left));
-        let right = Box::new(self.translate_expr(&eb.right));
+        let mut right = Box::new(self.translate_expr(&eb.right));
+        if matches!(eb.op, syn::BinOp::Shl(_) | syn::BinOp::Shr(_)) {
+            right = Box::new(Node::BuiltinCall(
+                "intCast".to_string(),
+                vec![*right],
+            ));
+        }
         match eb.op {
             syn::BinOp::Add(_) => Node::Add(left, right),
             syn::BinOp::AddAssign(_) => Node::AssignAdd(left, right),
@@ -132,7 +138,18 @@ impl Translator {
     fn translate_lit(&self, el: &syn::ExprLit) -> Node {
         match &el.lit {
             syn::Lit::Bool(b) => Node::Identifier(b.value.to_string()),
-            syn::Lit::Int(i) => Node::NumberLiteral(i.base10_digits().to_string()),
+            syn::Lit::Int(i) => {
+                let number = Node::NumberLiteral(i.base10_digits().to_string());
+                if !i.suffix().is_empty() {
+                    let ty = i.suffix().to_string();
+                    Node::BuiltinCall(
+                        "as".to_string(),
+                        vec![Node::Identifier(ty), number],
+                    )
+                } else {
+                    number
+                }
+            }
             syn::Lit::Str(s) => Node::StringLiteral(s.value()),
             _ => Node::Todo("lit".to_string()),
         }

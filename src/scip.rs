@@ -111,8 +111,8 @@ impl Scip {
 
     pub fn binary_type_at(&self, range: &Range) -> Option<(syn::Type, syn::Type)> {
         let symbol = self.symbol_at(range)?;
-        let idx = symbol.find("/arith/impl#[")?;
-        let rest = &symbol[idx + "/arith/impl#[".len()..];
+        let idx = symbol.find("/impl#[")?;
+        let rest = &symbol[idx + "/impl#[".len()..];
         let (left_str, rest) = if let Some(rest) = rest.strip_prefix('`') {
             let end = rest.find('`')?;
             (&rest[..end], &rest[end + 1..])
