@@ -16,7 +16,7 @@ mod ty;
 
 use crate::ast::zig::{Node, Var};
 use crate::scip::{Kind, Scip};
-use crate::translate::name::{camel_to_snake, snake_to_camel};
+use crate::translate::name::{camel_to_snake, screaming_to_camel, snake_to_camel};
 use drop::DropInfo;
 use generic::GenericFn;
 
@@ -71,12 +71,16 @@ impl Translator {
             "core::iter::Iterator::enumerate" => "iter/traits/iterator/Iterator#enumerate().",
             "core::macros::assert_eq" => "macros/assert_eq!",
             "core::mem::drop" => "mem/drop().",
+            "core::num::wrapping_add" => "]wrapping_add().",
+            "core::num::wrapping_mul" => "]wrapping_mul().",
+            "core::num::wrapping_sub" => "]wrapping_sub().",
             "core::ops::drop::Drop" => "ops/drop/Drop#",
             "core::option::Option" => "option/Option#",
             "core::option::Option::Some" => "option/Option#Some#",
             "core::option::Option::None" => "option/Option#None#",
             "core::slice::iter" => "slice/impl#[`[T]`]iter().",
             "core::slice::len" => "slice/impl#[`[T]`]len().",
+            "core::str::as_bytes" => "str/impl#[str]as_bytes().",
             "std::iter::zip" => "iter/adapters/zip/zip().",
             "std::macros::assert" => "macros/builtin/assert!",
             "std::macros::panic" => "macros/panic!",
@@ -183,8 +187,8 @@ impl Translator {
                     let ty = path.segments[path.segments.len() - 2].ident.to_string();
                     let method = snake_to_camel(&ident.to_string());
                     Node::FieldAccess(Box::new(Node::Identifier(ty)), method)
-                } else if matches!(kind, Some(Kind::StaticVariable)) {
-                    Node::Identifier(snake_to_camel(&ident.to_string().to_ascii_lowercase()))
+                } else if matches!(kind, Some(Kind::Constant) | Some(Kind::StaticVariable)) {
+                    Node::Identifier(screaming_to_camel(&ident.to_string()))
                 } else {
                     Node::Identifier(snake_to_camel(&ident.to_string()))
                 }

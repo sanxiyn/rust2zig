@@ -6,7 +6,7 @@ impl Translator {
         if eb.label.is_some() || eb.expr.is_some() {
             return Node::Todo("break".to_string());
         }
-        Node::Break
+        Node::Break(None, None)
     }
 
     pub fn translate_continue(&self, ec: &syn::ExprContinue) -> Node {

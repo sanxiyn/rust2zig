@@ -151,7 +151,8 @@ run a subset; with no arguments, all examples run.
 Examples currently passing both suites: gcd, direction, div, option, result,
 ratio (struct), divmod (tuple), sum (for loop), geometry, closure, min
 (generic function), iter, inc (`&mut T` and `&T` parameters), geometry2
-(`&mut self` receiver), dot. The `option` example also exercises a generic
+(`&mut self` receiver), dot, hash (FNV-1a, extracted from
+`const-fnv1a-hash`). The `option` example also exercises a generic
 method (`Option::and`) and `&self` receiver.
 
 ## Notes
@@ -189,6 +190,32 @@ method (`Option::and`) and `&self` receiver.
   rewrite (Zig rejects `%` on signed runtime ints), gated by `rem_is_signed`
   via `Scip::binary_type_at`. `peel_ref` and `is_signed_int` are local helpers
   in `expr.rs`.
+* Top-level `const` and `static` items become Zig `const` / `var` decls.
+  Rust's `SCREAMING_SNAKE_CASE` becomes camelCase via `screaming_to_camel`,
+  which is also how use sites are emitted (`Kind::Constant` and
+  `Kind::StaticVariable` in `translate_path`).
+* Integer literals keep their source spelling (`0x811c9dc5`, `1_000`), which
+  Zig accepts; only a Rust type suffix is stripped, and then re-emitted as
+  `@as(T, n)`.
+* `x as T` (`translate_cast`) emits `@as(T, x)`. This covers widening integer
+  casts only; narrowing needs `@truncate` and is TODO (see
+  `research/random.md`).
+* Wrapping arithmetic: `x.wrapping_add/mul/sub(y)` maps to Zig's `+%` / `*%` /
+  `-%` by moniker dispatch (`wrapping_op`), the same shape as `.len()`. Rust
+  has no wrapping compound assignment, so `x = x.wrapping_mul(y)` is folded
+  into `x *%= y` by `translate_wrapping_assign`; the fold is restricted to
+  path and field places, where evaluating the place twice is harmless.
+* `&str` translates to `[]const u8` and `.as_bytes()` erases to its receiver,
+  since a Zig string literal already is a byte slice.
+* A `match` on `core::option::Option` cannot become a switch, because Zig
+  optionals are not unions. `translate_option_match` (detected by a `Some` or
+  `None` pattern moniker, so user-defined `Option` enums keep the switch path)
+  lowers it to a labeled block containing one `if` per arm, with `break :blk`
+  carrying each arm's value; the last arm becomes the block's result, since
+  rustc already checked exhaustiveness. `Some(x)` tests the optional with a
+  capture, `None` tests `== null`. Guards fall out of this shape: a guard on a
+  `Some` arm nests inside the capture (where the binding is in scope), other
+  guards are `and`-ed onto the test.
 * Indexing `a[i]` (`translate_index`) translates verbatim to Zig
   `a[i]`. Slicing (`a[i..j]`, where the index is a range) is TODO.
 * Slice `.len()` is special-cased in `translate_method_call`: detected
@@ -254,6 +281,10 @@ method (`Option::and`) and `&self` receiver.
   share the same namespace. Rust enum variants like `Ok`/`Err` become fields
   `ok`/`err` which collide with methods of the same name. Needs a renaming
   strategy.
+* Labeled blocks all use the single label `blk` (`BLOCK_LABEL`). A block
+  expression nested in another one — an option-match arm whose body is a
+  multi-statement block, say — would bind its `break :blk` to the inner
+  block. No example hits this yet; it needs unique labels.
 * Format specifiers: Without type info, `println!("{}", x)` translates
   to `std.debug.print("{}\n", .{x})`. This works for integers but not for
   strings. Currently hacked with sed, see `test.sh`.

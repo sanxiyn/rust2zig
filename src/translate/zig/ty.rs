@@ -52,6 +52,8 @@ impl Translator {
                 if let syn::Type::Slice(ts) = &*tr.elem {
                     let ty = self.translate_type(&ts.elem);
                     Node::SliceType(Box::new(ty))
+                } else if is_str(&tr.elem) {
+                    Node::SliceType(Box::new(Node::Identifier("u8".to_string())))
                 } else if tr.mutability.is_some() {
                     let ty = self.translate_type(&tr.elem);
                     Node::PtrType {
@@ -84,4 +86,9 @@ impl Translator {
             syn::ReturnType::Type(_, ty) => self.translate_type(ty),
         }
     }
+}
+
+fn is_str(ty: &syn::Type) -> bool {
+    let syn::Type::Path(tp) = ty else { return false };
+    tp.path.is_ident("str")
 }

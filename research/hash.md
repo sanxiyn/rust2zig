@@ -1,5 +1,15 @@
 # FNV-1a hash
 
+**Implemented.** `rust/hash` -> `zig/hash.zig` passes both suites. The fixture
+that landed is the level 2 shape (the `limit: Option<usize>` variant, with an
+index-based `while` loop) plus the level 3 `fnv1a_hash_str_32` entry point, so
+levels 1-3 below are done except the `_64` / `_128` widths and the xor-fold
+variant. See the README notes for what each gap became; the extras this
+fixture forced beyond the two predicted below were top-level `const` items, a
+`match` on a real `core::option::Option` (Zig optionals are not unions, so it
+lowers to a labeled block, which is also what makes the arm's guard
+expressible), and `&str` / `as_bytes`.
+
 Status and roadmap for the first genuinely leaf, trait-free `.crate`-shaped
 target: `const-fnv1a-hash`. Shares the MVP scope and `.crate` ingestion notes
 with [isqrt.md](isqrt.md); this doc records what is specific to the hash
@@ -149,9 +159,17 @@ Details to confirm during implementation:
 
 ## Next steps
 
-1. Lay down `rust/hash` + `zig/hash.zig` level-1 golden pair.
-2. Implement `wrapping_mul` -> `*%` (moniker dispatch on method call) and
-   widening `as` (`syn::Expr::Cast`).
-3. Confirm slice-iteration value/deref bookkeeping under the `as` cast.
-4. Then level 2 (`Option` limit) or pivot to [random.md](random.md) for
-   narrowing `as` + `rotate_right`.
+Done: the golden pair, `wrapping_*` -> `*%` / `+%` / `-%` (plus the `x = x
+.wrapping_mul(y)` -> `x *%= y` fold), and widening `as`. The slice-iteration
+question never arose: this fixture indexes (`bytes[i]`) rather than iterating.
+
+Remaining here, in order of how much they buy:
+
+1. Narrowing `as` -> `@truncate`, so `as` is not silently widening-only.
+   Shared with [random.md](random.md), which is the natural next fixture.
+2. The `_64` / `_128` widths, if wanted as a multi-function test.
+3. The xor-fold variant's `to_ne_bytes` / `from_ne_bytes`.
+
+The `limit` path is translated but not exercised at runtime: both Rust tests
+and the Zig test reach `fnv1a_hash_32` only through `fnv1a_hash_str_32`, which
+passes `None`. A test calling it with `Some(n)` would cover the guard.

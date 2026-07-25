@@ -143,6 +143,9 @@ impl Translator {
             }
             stmts.extend(self.translate_stmt(stmt, false));
         }
+        if stmts.is_empty() {
+            return result;
+        }
         Node::BlockExpr {
             stmts,
             result: Box::new(result),

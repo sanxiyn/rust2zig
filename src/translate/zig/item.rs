@@ -1,10 +1,11 @@
 use crate::ast::zig::{EnumVariant, Field, Node, Param, Var};
-use crate::translate::name::{camel_to_snake, escape_zig, snake_to_camel};
+use crate::translate::name::{camel_to_snake, escape_zig, screaming_to_camel, snake_to_camel};
 use super::Translator;
 
 impl Translator {
     pub fn translate_item(&self, item: &syn::Item) -> Option<Node> {
         match item {
+            syn::Item::Const(c) => Some(self.translate_const(c)),
             syn::Item::Enum(e) => Some(self.translate_enum(e)),
             syn::Item::Struct(s) => Some(self.translate_struct(s)),
             syn::Item::Fn(f) => Some(self.translate_fn(f)),
@@ -195,9 +196,23 @@ impl Translator {
         }).collect()
     }
 
+    fn translate_const(&self, c: &syn::ItemConst) -> Node {
+        let name = screaming_to_camel(&c.ident.to_string());
+        let ty = self.translate_type(&c.ty);
+        let expr = self.translate_expr(&c.expr);
+        Node::SimpleVarDecl {
+            var: Var {
+                is_const: true,
+                name,
+                ty: Some(Box::new(ty)),
+            },
+            expr: Some(Box::new(expr)),
+        }
+    }
+
     fn translate_static(&self, s: &syn::ItemStatic) -> Node {
         let is_const = matches!(s.mutability, syn::StaticMutability::None);
-        let name = snake_to_camel(&s.ident.to_string().to_ascii_lowercase());
+        let name = screaming_to_camel(&s.ident.to_string());
         let ty = self.translate_type(&s.ty);
         let expr = self.translate_expr(&s.expr);
         Node::SimpleVarDecl {

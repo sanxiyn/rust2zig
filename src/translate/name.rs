@@ -30,6 +30,10 @@ pub fn escape_zig(name: &str) -> String {
     }
 }
 
+pub fn screaming_to_camel(s: &str) -> String {
+    snake_to_camel(&s.to_ascii_lowercase())
+}
+
 pub fn snake_to_camel(s: &str) -> String {
     let mut result: String = Default::default();
     let mut capitalize_next = false;

@@ -1,4 +1,4 @@
-use crate::ast::zig::{EnumVariant, Field, Node, Param, SwitchArm, SwitchBody, Var};
+use crate::ast::zig::{BLOCK_LABEL, EnumVariant, Field, Node, Param, SwitchArm, SwitchBody, Var};
 
 const INDENT_SIZE: usize = 4;
 
@@ -239,12 +239,12 @@ impl Printer {
     }
 
     fn block_expr(&mut self, stmts: &[Node], result: &Node) {
-        self.out.push_str("blk: {\n");
+        self.out.push_str(&format!("{}: {{\n", BLOCK_LABEL));
         self.indent();
         for stmt in stmts {
             self.stmt(stmt);
         }
-        self.out.push_str(&format!("{}break :blk ", self.pad()));
+        self.out.push_str(&format!("{}break :{} ", self.pad(), BLOCK_LABEL));
         self.value(result);
         self.out.push_str(";\n");
         self.dedent();
@@ -306,14 +306,18 @@ impl Printer {
     fn expr(&self, node: &Node) -> String {
         match node {
             Node::Add(left, right) |
+            Node::AddWrap(left, right) |
             Node::AssignAdd(left, right) |
+            Node::AssignAddWrap(left, right) |
             Node::AssignBitAnd(left, right) |
             Node::AssignBitOr(left, right) |
             Node::AssignBitXor(left, right) |
             Node::AssignDiv(left, right) |
             Node::AssignMod(left, right) |
             Node::AssignMul(left, right) |
+            Node::AssignMulWrap(left, right) |
             Node::AssignSub(left, right) |
+            Node::AssignSubWrap(left, right) |
             Node::BangEqual(left, right) |
             Node::BitAnd(left, right) |
             Node::BitOr(left, right) |
@@ -328,9 +332,11 @@ impl Printer {
             Node::LessThan(left, right) |
             Node::Mod(left, right) |
             Node::Mul(left, right) |
+            Node::MulWrap(left, right) |
             Node::Shl(left, right) |
             Node::Shr(left, right) |
-            Node::Sub(left, right) => {
+            Node::Sub(left, right) |
+            Node::SubWrap(left, right) => {
                 let left = self.expr(left);
                 let right = self.expr(right);
                 let op = self.binop(node);
@@ -348,7 +354,16 @@ impl Printer {
             }
             Node::Assign(left, right) => format!("{} = {}", self.expr(left), self.expr(right)),
             Node::BoolNot(expr) => format!("!{}", self.expr(expr)),
-            Node::Break => "break".to_string(),
+            Node::Break(label, expr) => {
+                let mut text = "break".to_string();
+                if let Some(label) = label {
+                    text.push_str(&format!(" :{}", label));
+                }
+                if let Some(expr) = expr {
+                    text.push_str(&format!(" {}", self.expr(expr)));
+                }
+                text
+            }
             Node::BuiltinCall(name, args) => {
                 let args: Vec<String> = args.iter().map(|a| self.expr(a)).collect();
                 format!("@{}({})", name, args.join(", "))
@@ -404,14 +419,18 @@ impl Printer {
     fn binop(&self, node: &Node) -> &'static str {
         match node {
             Node::Add(..) => "+",
+            Node::AddWrap(..) => "+%",
             Node::AssignAdd(..) => "+=",
+            Node::AssignAddWrap(..) => "+%=",
             Node::AssignBitAnd(..) => "&=",
             Node::AssignBitOr(..) => "|=",
             Node::AssignBitXor(..) => "^=",
             Node::AssignDiv(..) => "/=",
             Node::AssignMod(..) => "%=",
             Node::AssignMul(..) => "*=",
+            Node::AssignMulWrap(..) => "*%=",
             Node::AssignSub(..) => "-=",
+            Node::AssignSubWrap(..) => "-%=",
             Node::BangEqual(..) => "!=",
             Node::BitAnd(..) => "&",
             Node::BitOr(..) => "|",
@@ -426,9 +445,11 @@ impl Printer {
             Node::LessThan(..) => "<",
             Node::Mod(..) => "%",
             Node::Mul(..) => "*",
+            Node::MulWrap(..) => "*%",
             Node::Shl(..) => "<<",
             Node::Shr(..) => ">>",
             Node::Sub(..) => "-",
+            Node::SubWrap(..) => "-%",
             _ => "/* TODO: binop */",
         }
     }

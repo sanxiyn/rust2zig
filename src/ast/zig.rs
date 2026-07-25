@@ -1,8 +1,12 @@
 //! A Zig AST, modeled after std.zig.Ast
 
+pub const BLOCK_LABEL: &str = "blk";
+
 pub enum Node {
     /// .add
     Add(Box<Node>, Box<Node>),
+    /// .add_wrap
+    AddWrap(Box<Node>, Box<Node>),
     /// .address_of
     AddressOf(Box<Node>),
     /// .array_access
@@ -15,6 +19,8 @@ pub enum Node {
     Assign(Box<Node>, Box<Node>),
     /// .assign_add
     AssignAdd(Box<Node>, Box<Node>),
+    /// .assign_add_wrap
+    AssignAddWrap(Box<Node>, Box<Node>),
     /// .assign_bit_and
     AssignBitAnd(Box<Node>, Box<Node>),
     /// .assign_bit_or
@@ -29,8 +35,12 @@ pub enum Node {
     AssignMod(Box<Node>, Box<Node>),
     /// .assign_mul
     AssignMul(Box<Node>, Box<Node>),
+    /// .assign_mul_wrap
+    AssignMulWrap(Box<Node>, Box<Node>),
     /// .assign_sub
     AssignSub(Box<Node>, Box<Node>),
+    /// .assign_sub_wrap
+    AssignSubWrap(Box<Node>, Box<Node>),
     /// .bang_equal
     BangEqual(Box<Node>, Box<Node>),
     /// .bit_and
@@ -48,7 +58,7 @@ pub enum Node {
     /// .bool_or
     BoolOr(Box<Node>, Box<Node>),
     /// .@"break"
-    Break,
+    Break(Option<String>, Option<Box<Node>>),
     /// .builtin_call
     BuiltinCall(String, Vec<Node>),
     /// .call
@@ -90,6 +100,8 @@ pub enum Node {
     Mod(Box<Node>, Box<Node>),
     /// .mul
     Mul(Box<Node>, Box<Node>),
+    /// .mul_wrap
+    MulWrap(Box<Node>, Box<Node>),
     /// .number_literal
     NumberLiteral(String),
     /// .@"return"
@@ -104,6 +116,8 @@ pub enum Node {
     StructInit(Option<Box<Node>>, Vec<(String, Node)>),
     /// .sub
     Sub(Box<Node>, Box<Node>),
+    /// .sub_wrap
+    SubWrap(Box<Node>, Box<Node>),
     /// .@"try"
     Try(Box<Node>),
 

@@ -1,7 +1,14 @@
-use crate::ast::zig::{Capture, Node, SwitchArm, SwitchBody, Var};
+use crate::ast::zig::{BLOCK_LABEL, Capture, Node, SwitchArm, SwitchBody, Var};
 use crate::translate::name::camel_to_snake;
 use super::{PathMode, Translator};
+use super::call::Wrapping;
 use super::pat::Accessor;
+
+enum OptionPat {
+    Some(String),
+    None,
+    Wild,
+}
 
 impl Translator {
     pub fn translate_expr(&self, expr: &syn::Expr) -> Node {
@@ -12,6 +19,7 @@ impl Translator {
             syn::Expr::Block(eb) => self.translate_block_expr(&eb.block),
             syn::Expr::Break(eb) => self.translate_break(eb),
             syn::Expr::Call(ec) => self.translate_call(ec),
+            syn::Expr::Cast(ec) => self.translate_cast(ec),
             syn::Expr::Continue(ec) => self.translate_continue(ec),
             syn::Expr::Field(ef) => self.translate_field(ef),
             syn::Expr::ForLoop(efl) => self.translate_for_loop(efl),
@@ -59,9 +67,30 @@ impl Translator {
     }
 
     fn translate_assign(&self, ea: &syn::ExprAssign) -> Node {
+        if let Some(node) = self.translate_wrapping_assign(ea) {
+            return node;
+        }
         let left = self.translate_expr(&ea.left);
         let right = self.translate_expr(&ea.right);
         Node::Assign(Box::new(left), Box::new(right))
+    }
+
+    fn translate_wrapping_assign(&self, ea: &syn::ExprAssign) -> Option<Node> {
+        if !matches!(*ea.left, syn::Expr::Path(_) | syn::Expr::Field(_)) {
+            return None;
+        }
+        let syn::Expr::MethodCall(emc) = &*ea.right else { return None };
+        if *emc.receiver != *ea.left {
+            return None;
+        }
+        let op = self.wrapping_op(&emc.method)?;
+        let left = Box::new(self.translate_expr(&ea.left));
+        let right = Box::new(self.translate_expr(&emc.args[0]));
+        Some(match op {
+            Wrapping::Add => Node::AssignAddWrap(left, right),
+            Wrapping::Mul => Node::AssignMulWrap(left, right),
+            Wrapping::Sub => Node::AssignSubWrap(left, right),
+        })
     }
 
     fn translate_binary(&self, eb: &syn::ExprBinary) -> Node {
@@ -112,6 +141,12 @@ impl Translator {
         }
     }
 
+    fn translate_cast(&self, ec: &syn::ExprCast) -> Node {
+        let expr = self.translate_expr(&ec.expr);
+        let ty = self.translate_type(&ec.ty);
+        Node::BuiltinCall("as".to_string(), vec![ty, expr])
+    }
+
     fn rem_is_signed(&self, eb: &syn::ExprBinary) -> bool {
         use syn::spanned::Spanned;
         match self.scip.binary_type_at(&eb.op.span().into()) {
@@ -139,7 +174,7 @@ impl Translator {
         match &el.lit {
             syn::Lit::Bool(b) => Node::Identifier(b.value.to_string()),
             syn::Lit::Int(i) => {
-                let number = Node::NumberLiteral(i.base10_digits().to_string());
+                let number = Node::NumberLiteral(int_literal(i));
                 if !i.suffix().is_empty() {
                     let ty = i.suffix().to_string();
                     Node::BuiltinCall(
@@ -156,6 +191,12 @@ impl Translator {
     }
 
     fn translate_match(&self, em: &syn::ExprMatch) -> Node {
+        let is_option = em.arms.iter().any(|arm| {
+            matches!(self.option_pat(&arm.pat), Some(OptionPat::Some(_) | OptionPat::None))
+        });
+        if is_option {
+            return self.translate_match_option(em);
+        }
         let cond = Box::new(self.translate_expr(&em.expr));
         let arms = em.arms.iter().map(|arm| self.translate_match_arm(arm)).collect();
         Node::Switch { cond, arms }
@@ -212,6 +253,81 @@ impl Translator {
             let capture = captures.first().map(|capture| Capture { name: capture.name.clone(), by_ref });
             SwitchArm { pattern, capture, body: SwitchBody::Expr(result) }
         }
+    }
+
+    fn option_pat(&self, pat: &syn::Pat) -> Option<OptionPat> {
+        match pat {
+            syn::Pat::TupleStruct(pts)
+                if self.check_moniker(&pts.path, "core::option::Option::Some") =>
+            {
+                if pts.elems.len() != 1 {
+                    return None;
+                }
+                let syn::Pat::Ident(pi) = &pts.elems[0] else { return None };
+                Some(OptionPat::Some(self.rename_ident(&pi.ident)))
+            }
+            syn::Pat::Path(pp)
+                if self.check_moniker(&pp.path, "core::option::Option::None") =>
+            {
+                Some(OptionPat::None)
+            }
+            syn::Pat::Wild(_) => Some(OptionPat::Wild),
+            _ => None,
+        }
+    }
+
+    fn translate_match_option(&self, em: &syn::ExprMatch) -> Node {
+        let mut stmts = vec![];
+        let count = em.arms.len();
+        for (i, arm) in em.arms.iter().enumerate() {
+            let Some(pat) = self.option_pat(&arm.pat) else {
+                return Node::Todo("match".to_string());
+            };
+            let guard = arm.guard.as_ref().map(|(_, guard)| self.translate_expr(guard));
+            let body = self.translate_expr(&arm.body);
+            if i + 1 == count && guard.is_none() {
+                return Node::BlockExpr { stmts, result: Box::new(body) };
+            }
+            let scrutinee = Box::new(self.translate_expr(&em.expr));
+            let break_ = Node::Break(Some(BLOCK_LABEL.to_string()), Some(Box::new(body)));
+            let (cond, capture, then_branch) = match (pat, guard) {
+                (OptionPat::Some(name), None) => (scrutinee, Some(name), break_),
+                (OptionPat::Some(name), Some(guard)) => {
+                    let inner = Node::If {
+                        cond: Box::new(guard),
+                        capture: None,
+                        then_branch: Box::new(Node::Block(vec![break_])),
+                        else_branch: None,
+                    };
+                    (scrutinee, Some(name), inner)
+                }
+                (pat, guard) => {
+                    let test = match pat {
+                        OptionPat::None => Some(Node::EqualEqual(
+                            scrutinee,
+                            Box::new(Node::Identifier("null".to_string())),
+                        )),
+                        _ => None,
+                    };
+                    let cond = match (test, guard) {
+                        (Some(test), Some(guard)) => {
+                            Node::BoolAnd(Box::new(test), Box::new(guard))
+                        }
+                        (Some(test), None) => test,
+                        (None, Some(guard)) => guard,
+                        (None, None) => return Node::Todo("match".to_string()),
+                    };
+                    (Box::new(cond), None, break_)
+                }
+            };
+            stmts.push(Node::If {
+                cond,
+                capture,
+                then_branch: Box::new(Node::Block(vec![then_branch])),
+                else_branch: None,
+            });
+        }
+        Node::Todo("match".to_string())
     }
 
     fn translate_paren(&self, ep: &syn::ExprParen) -> Node {
@@ -291,6 +407,14 @@ impl Translator {
                 Node::Todo("unary".to_string())
             }
         }
+    }
+}
+
+fn int_literal(li: &syn::LitInt) -> String {
+    let text = li.token().to_string();
+    match text.strip_suffix(li.suffix()) {
+        Some(text) => text.to_string(),
+        None => text,
     }
 }
 

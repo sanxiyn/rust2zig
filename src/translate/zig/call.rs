@@ -2,6 +2,13 @@ use crate::ast::zig::Node;
 use crate::translate::name::{camel_to_snake, escape_zig, snake_to_camel};
 use super::{PathMode, Translator};
 
+#[derive(Clone, Copy)]
+pub enum Wrapping {
+    Add,
+    Mul,
+    Sub,
+}
+
 impl Translator {
     pub fn translate_call(&self, ec: &syn::ExprCall) -> Node {
         if let syn::Expr::Path(ep) = &*ec.func {
@@ -75,6 +82,12 @@ impl Translator {
                 "len".to_string(),
             );
         }
+        if self.check_moniker_ident(&emc.method, "core::str::as_bytes") {
+            return self.translate_expr(&emc.receiver);
+        }
+        if let Some(node) = self.translate_wrapping(emc) {
+            return node;
+        }
         let base = self.translate_expr(&emc.receiver);
         let method = escape_zig(&snake_to_camel(&emc.method.to_string()));
         let func = Node::FieldAccess(Box::new(base), method);
@@ -91,5 +104,27 @@ impl Translator {
             args.push(arg);
         }
         Node::Call(Box::new(func), args)
+    }
+
+    fn translate_wrapping(&self, emc: &syn::ExprMethodCall) -> Option<Node> {
+        let op = self.wrapping_op(&emc.method)?;
+        let left = Box::new(self.translate_expr(&emc.receiver));
+        let right = Box::new(self.translate_expr(&emc.args[0]));
+        Some(match op {
+            Wrapping::Add => Node::AddWrap(left, right),
+            Wrapping::Mul => Node::MulWrap(left, right),
+            Wrapping::Sub => Node::SubWrap(left, right),
+        })
+    }
+
+    pub fn wrapping_op(&self, method: &syn::Ident) -> Option<Wrapping> {
+        const WRAPPING: &[(&str, Wrapping)] = &[
+            ("core::num::wrapping_add", Wrapping::Add),
+            ("core::num::wrapping_mul", Wrapping::Mul),
+            ("core::num::wrapping_sub", Wrapping::Sub),
+        ];
+        WRAPPING.iter()
+            .find(|(moniker, _)| self.check_moniker_ident(method, moniker))
+            .map(|(_, op)| *op)
     }
 }
