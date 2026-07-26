@@ -1,7 +1,6 @@
 const std = @import("std");
 
 var dropLog: [16]i32 = .{0} ** 16;
-
 var dropLen: usize = 0;
 
 fn logDrop(id: i32) void {

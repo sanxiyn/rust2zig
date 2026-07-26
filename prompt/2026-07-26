@@ -1,0 +1,20 @@
+Explore the project and give me a summary.
+Let's do hash. I already manually wrote rust/hash. Also consult research/hash.md.
+You should extend Break to have label and value, not introduce BreakValue (which does not match Zig AST).
+Keep Break a tuple-like variant, not a struct-like variant, like other AST variants.
+Break(label, expr), not Break(label, value).
+Let's do .assign_add_wrap, .assign_mul_wrap, .assign_sub_wrap as well, while we are here.
+Why is this needed? Which Rust constructs are we trying to translate?
+/compact
+How do you think things are going so far?
+I already committed (as one).
+Let's do random now. I already manually wrote rust/random. As usual, also consult research/random.md.
+If it is called associated const, let's name the method translate_associated_const.
+There is dotted_name which I think is useful here.
+Let's move it somewhere more reasonable, probably zig/mod.rs.
+You prettified random.zig, looking at actual file there is a newline between two consts, which is ugly. Can we fix it?
+Let's fix a newline between two top-level consts as well. Also, it would be better if you suggest or do these sort of things proactively.
+Right. We (let's be honest, mostly I) built up lots of seatbelts while developing to this point. As you can see, we are implementing what we researched in prompt/2026-07-24. What should we do next?
+Re: dropping items. I think we already print /* TODO: expr */ and do not drop expressions. We probably should do the same for items?
+/insights
+/exit

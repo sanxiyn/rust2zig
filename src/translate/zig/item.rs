@@ -6,11 +6,41 @@ impl Translator {
     pub fn translate_item(&self, item: &syn::Item) -> Option<Node> {
         match item {
             syn::Item::Const(c) => Some(self.translate_const(c)),
+            syn::Item::Static(s) => Some(self.translate_static(s)),
             syn::Item::Enum(e) => Some(self.translate_enum(e)),
             syn::Item::Struct(s) => Some(self.translate_struct(s)),
             syn::Item::Fn(f) => Some(self.translate_fn(f)),
-            syn::Item::Static(s) => Some(self.translate_static(s)),
-            _ => None,
+            syn::Item::Impl(_) => None,
+            _ => Some(Node::Todo(item_kind(item).to_string())),
+        }
+    }
+
+    fn translate_const(&self, c: &syn::ItemConst) -> Node {
+        let name = screaming_to_camel(&c.ident.to_string());
+        let ty = self.translate_type(&c.ty);
+        let expr = self.translate_expr(&c.expr);
+        Node::SimpleVarDecl {
+            var: Var {
+                is_const: true,
+                name,
+                ty: Some(Box::new(ty)),
+            },
+            expr: Some(Box::new(expr)),
+        }
+    }
+
+    fn translate_static(&self, s: &syn::ItemStatic) -> Node {
+        let is_const = matches!(s.mutability, syn::StaticMutability::None);
+        let name = screaming_to_camel(&s.ident.to_string());
+        let ty = self.translate_type(&s.ty);
+        let expr = self.translate_expr(&s.expr);
+        Node::SimpleVarDecl {
+            var: Var {
+                is_const,
+                name,
+                ty: Some(Box::new(ty)),
+            },
+            expr: Some(Box::new(expr)),
         }
     }
 
@@ -51,6 +81,10 @@ impl Translator {
         for i in impls {
             for ii in &i.items {
                 match ii {
+                    syn::ImplItem::Const(c) => {
+                        let c = self.translate_associated_const(c);
+                        impl_items.push(c);
+                    }
                     syn::ImplItem::Fn(method) => {
                         let method = self.translate_method(method);
                         impl_items.push(method);
@@ -63,6 +97,20 @@ impl Translator {
             }
         }
         impl_items
+    }
+
+    fn translate_associated_const(&self, c: &syn::ImplItemConst) -> Node {
+        let name = screaming_to_camel(&c.ident.to_string());
+        let ty = self.translate_type(&c.ty);
+        let expr = self.translate_expr(&c.expr);
+        Node::SimpleVarDecl {
+            var: Var {
+                is_const: true,
+                name,
+                ty: Some(Box::new(ty)),
+            },
+            expr: Some(Box::new(expr)),
+        }
     }
 
     fn translate_method(&self, method: &syn::ImplItemFn) -> Node {
@@ -195,33 +243,19 @@ impl Translator {
             ty: Node::Identifier("type".to_string()),
         }).collect()
     }
+}
 
-    fn translate_const(&self, c: &syn::ItemConst) -> Node {
-        let name = screaming_to_camel(&c.ident.to_string());
-        let ty = self.translate_type(&c.ty);
-        let expr = self.translate_expr(&c.expr);
-        Node::SimpleVarDecl {
-            var: Var {
-                is_const: true,
-                name,
-                ty: Some(Box::new(ty)),
-            },
-            expr: Some(Box::new(expr)),
-        }
-    }
-
-    fn translate_static(&self, s: &syn::ItemStatic) -> Node {
-        let is_const = matches!(s.mutability, syn::StaticMutability::None);
-        let name = screaming_to_camel(&s.ident.to_string());
-        let ty = self.translate_type(&s.ty);
-        let expr = self.translate_expr(&s.expr);
-        Node::SimpleVarDecl {
-            var: Var {
-                is_const,
-                name,
-                ty: Some(Box::new(ty)),
-            },
-            expr: Some(Box::new(expr)),
-        }
+fn item_kind(item: &syn::Item) -> &'static str {
+    match item {
+        syn::Item::ExternCrate(_) => "extern crate",
+        syn::Item::ForeignMod(_) => "extern block",
+        syn::Item::Macro(_) => "macro",
+        syn::Item::Mod(_) => "mod",
+        syn::Item::Trait(_) => "trait",
+        syn::Item::TraitAlias(_) => "trait alias",
+        syn::Item::Type(_) => "type alias",
+        syn::Item::Union(_) => "union",
+        syn::Item::Use(_) => "use",
+        _ => "item",
     }
 }

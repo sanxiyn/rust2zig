@@ -103,13 +103,10 @@ impl Translator {
             );
         }
         let left = Box::new(self.translate_expr(&eb.left));
-        let mut right = Box::new(self.translate_expr(&eb.right));
-        if matches!(eb.op, syn::BinOp::Shl(_) | syn::BinOp::Shr(_)) {
-            right = Box::new(Node::BuiltinCall(
-                "intCast".to_string(),
-                vec![*right],
-            ));
-        }
+        let right = Box::new(match eb.op {
+            syn::BinOp::Shl(_) | syn::BinOp::Shr(_) => self.shift_amount(&eb.right),
+            _ => self.translate_expr(&eb.right),
+        });
         match eb.op {
             syn::BinOp::Add(_) => Node::Add(left, right),
             syn::BinOp::AddAssign(_) => Node::AssignAdd(left, right),
@@ -141,10 +138,65 @@ impl Translator {
         }
     }
 
+    pub fn shift_amount(&self, expr: &syn::Expr) -> Node {
+        Node::BuiltinCall("intCast".to_string(), vec![self.translate_expr(expr)])
+    }
+
     fn translate_cast(&self, ec: &syn::ExprCast) -> Node {
-        let expr = self.translate_expr(&ec.expr);
+        let inner = match &*ec.expr {
+            syn::Expr::Paren(ep) => &ep.expr,
+            expr => expr,
+        };
+        let expr = self.translate_expr(inner);
         let ty = self.translate_type(&ec.ty);
+        if self.is_narrowing(&ec.expr, &ec.ty) {
+            return Node::BuiltinCall("truncate".to_string(), vec![expr]);
+        }
         Node::BuiltinCall("as".to_string(), vec![ty, expr])
+    }
+
+    fn is_narrowing(&self, expr: &syn::Expr, ty: &syn::Type) -> bool {
+        let Some(source) = self.expr_type(expr) else { return false };
+        let (Some(source), Some(target)) = (int_bits(&source), int_bits(ty)) else {
+            return false;
+        };
+        target < source
+    }
+
+    pub fn expr_type(&self, expr: &syn::Expr) -> Option<syn::Type> {
+        match expr {
+            syn::Expr::Binary(eb) => self.binary_expr_type(eb),
+            syn::Expr::Cast(ec) => Some((*ec.ty).clone()),
+            syn::Expr::Index(ei) => match peel_ref(&self.expr_type(&ei.expr)?) {
+                syn::Type::Array(ta) => Some((*ta.elem).clone()),
+                syn::Type::Slice(ts) => Some((*ts.elem).clone()),
+                _ => None,
+            },
+            syn::Expr::MethodCall(emc) => self.scip.return_type_at(&emc.method.span().into()),
+            syn::Expr::Paren(ep) => self.expr_type(&ep.expr),
+            syn::Expr::Path(ep) => {
+                let ident = &ep.path.segments.last()?.ident;
+                self.scip.type_at(&ident.span().into())
+            }
+            _ => None,
+        }
+    }
+
+    fn binary_expr_type(&self, eb: &syn::ExprBinary) -> Option<syn::Type> {
+        match eb.op {
+            syn::BinOp::Shl(_) | syn::BinOp::Shr(_) => self.expr_type(&eb.left),
+            syn::BinOp::Add(_)
+            | syn::BinOp::BitAnd(_)
+            | syn::BinOp::BitOr(_)
+            | syn::BinOp::BitXor(_)
+            | syn::BinOp::Div(_)
+            | syn::BinOp::Mul(_)
+            | syn::BinOp::Rem(_)
+            | syn::BinOp::Sub(_) => {
+                self.expr_type(&eb.left).or_else(|| self.expr_type(&eb.right))
+            }
+            _ => None,
+        }
     }
 
     fn rem_is_signed(&self, eb: &syn::ExprBinary) -> bool {
@@ -422,6 +474,19 @@ fn peel_ref(ty: &syn::Type) -> &syn::Type {
     match ty {
         syn::Type::Reference(tr) => &tr.elem,
         _ => ty,
+    }
+}
+
+fn int_bits(ty: &syn::Type) -> Option<u32> {
+    let syn::Type::Path(tp) = ty else { return None };
+    let segment = tp.path.segments.last()?;
+    match segment.ident.to_string().as_str() {
+        "i8" | "u8" => Some(8),
+        "i16" | "u16" => Some(16),
+        "i32" | "u32" => Some(32),
+        "i64" | "u64" => Some(64),
+        "i128" | "u128" => Some(128),
+        _ => None,
     }
 }
 

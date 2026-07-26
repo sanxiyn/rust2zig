@@ -1,5 +1,5 @@
 use crate::ast::zig::Node;
-use super::Translator;
+use super::{Translator, dotted_name};
 
 impl Translator {
     pub fn translate_macro(&self, mac: &syn::Macro) -> Option<Node> {
@@ -56,13 +56,4 @@ impl Translator {
         }
         args
     }
-}
-
-fn dotted_name(name: &str) -> Node {
-    let mut parts = name.split('.');
-    let mut node = Node::Identifier(parts.next().unwrap().to_string());
-    while let Some(part) = parts.next() {
-        node = Node::FieldAccess(Box::new(node), part.to_string());
-    }
-    node
 }

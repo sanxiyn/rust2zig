@@ -10,13 +10,29 @@ pub fn print(node: &Node) -> String {
     let Node::Root(items) = node else {
         panic!("print expects a Root node");
     };
-    for (i, item) in items.iter().enumerate() {
-        if i > 0 {
+    let mut previous: Option<&Node> = None;
+    for item in items {
+        if previous.is_some_and(|previous| !grouped(previous, item)) {
             printer.out.push('\n');
         }
         printer.decl(item);
+        previous = Some(item);
     }
     printer.out
+}
+
+fn grouped(previous: &Node, node: &Node) -> bool {
+    match (previous, node) {
+        (Node::SimpleVarDecl { .. }, Node::SimpleVarDecl { .. }) => {
+            is_import(previous) == is_import(node)
+        }
+        _ => false,
+    }
+}
+
+fn is_import(node: &Node) -> bool {
+    let Node::SimpleVarDecl { expr: Some(expr), .. } = node else { return false };
+    matches!(&**expr, Node::BuiltinCall(name, _) if name == "import")
 }
 
 struct Printer {
@@ -86,20 +102,38 @@ impl Printer {
                 self.fn_decl(name, params, return_type, body);
                 self.out.push('\n');
             }
+            Node::Todo(what) => self.out.push_str(&format!("{}// TODO: {}\n", self.pad(), what)),
             _ => self.out.push_str("// TODO: decl\n"),
         }
     }
 
-    fn container_body(&mut self, methods: &[Node], members: impl FnOnce(&mut Self)) {
-        if !methods.is_empty() {
+    fn container_body(&mut self, impl_items: &[Node], members: impl FnOnce(&mut Self)) {
+        if !impl_items.is_empty() {
             self.out.push_str(&format!("{}const Self = @This();\n\n", self.pad()));
         }
+        let mut has_consts = false;
+        for item in impl_items {
+            let Node::SimpleVarDecl { var, expr } = item else { continue };
+            self.simple_var_decl(var, expr.as_deref());
+            has_consts = true;
+        }
+        if has_consts {
+            self.out.push('\n');
+        }
         members(self);
-        for method in methods {
-            self.out.push('\n');
-            let Node::FnDecl { name, params, return_type, body } = method else { continue };
-            self.fn_decl(name, params, return_type, body);
-            self.out.push('\n');
+        for item in impl_items {
+            match item {
+                Node::FnDecl { name, params, return_type, body } => {
+                    self.out.push('\n');
+                    self.fn_decl(name, params, return_type, body);
+                    self.out.push('\n');
+                }
+                Node::Todo(_) => {
+                    self.out.push('\n');
+                    self.decl(item);
+                }
+                _ => {}
+            }
         }
     }
 
@@ -412,6 +446,7 @@ impl Printer {
                 let elements: Vec<String> = elements.iter().map(|e| self.expr(e)).collect();
                 format!("struct {{ {} }}", elements.join(", "))
             }
+            Node::Todo(what) => format!("/* TODO: {} */", what),
             _ => "/* TODO: expr */".to_string(),
         }
     }

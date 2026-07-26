@@ -1,6 +1,6 @@
 use crate::ast::zig::Node;
 use crate::translate::name::{camel_to_snake, escape_zig, snake_to_camel};
-use super::{PathMode, Translator};
+use super::{PathMode, Translator, dotted_name};
 
 #[derive(Clone, Copy)]
 pub enum Wrapping {
@@ -88,6 +88,12 @@ impl Translator {
         if let Some(node) = self.translate_wrapping(emc) {
             return node;
         }
+        if let Some(node) = self.translate_wrapping_shl(emc) {
+            return node;
+        }
+        if let Some(node) = self.translate_rotate(emc) {
+            return node;
+        }
         let base = self.translate_expr(&emc.receiver);
         let method = escape_zig(&snake_to_camel(&emc.method.to_string()));
         let func = Node::FieldAccess(Box::new(base), method);
@@ -115,6 +121,28 @@ impl Translator {
             Wrapping::Mul => Node::MulWrap(left, right),
             Wrapping::Sub => Node::SubWrap(left, right),
         })
+    }
+
+    fn translate_wrapping_shl(&self, emc: &syn::ExprMethodCall) -> Option<Node> {
+        if !self.check_moniker_ident(&emc.method, "core::num::wrapping_shl") {
+            return None;
+        }
+        let value = Box::new(self.translate_expr(&emc.receiver));
+        let amount = Box::new(self.shift_amount(&emc.args[0]));
+        Some(Node::Shl(value, amount))
+    }
+
+    fn translate_rotate(&self, emc: &syn::ExprMethodCall) -> Option<Node> {
+        if !self.check_moniker_ident(&emc.method, "core::num::rotate_right") {
+            return None;
+        }
+        let ty = self.translate_type(&self.expr_type(&emc.receiver)?);
+        let value = self.translate_expr(&emc.receiver);
+        let amount = self.translate_expr(&emc.args[0]);
+        Some(Node::Call(
+            Box::new(dotted_name("std.math.rotr")),
+            vec![ty, value, amount],
+        ))
     }
 
     pub fn wrapping_op(&self, method: &syn::Ident) -> Option<Wrapping> {

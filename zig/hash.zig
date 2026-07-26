@@ -1,7 +1,6 @@
 const std = @import("std");
 
 const fnvOffsetBasis32: u32 = 0x811c9dc5;
-
 const fnvPrime32: u32 = 0x01000193;
 
 fn fnv1aHash32(bytes: []const u8, limit: ?usize) u32 {
@@ -29,7 +28,6 @@ fn fnv1aHashStr32(input: []const u8) u32 {
 }
 
 const foobar: []const u8 = "foobar";
-
 const foobarHash32: u32 = 0xbf9cf968;
 
 test "32" {

@@ -71,7 +71,9 @@ impl Translator {
             "core::iter::Iterator::enumerate" => "iter/traits/iterator/Iterator#enumerate().",
             "core::macros::assert_eq" => "macros/assert_eq!",
             "core::mem::drop" => "mem/drop().",
+            "core::num::rotate_right" => "]rotate_right().",
             "core::num::wrapping_add" => "]wrapping_add().",
+            "core::num::wrapping_shl" => "]wrapping_shl().",
             "core::num::wrapping_mul" => "]wrapping_mul().",
             "core::num::wrapping_sub" => "]wrapping_sub().",
             "core::ops::drop::Drop" => "ops/drop/Drop#",
@@ -208,4 +210,13 @@ impl Translator {
             vec![],
         )
     }
+}
+
+pub fn dotted_name(name: &str) -> Node {
+    let mut parts = name.split('.');
+    let mut node = Node::Identifier(parts.next().unwrap().to_string());
+    for part in parts {
+        node = Node::FieldAccess(Box::new(node), part.to_string());
+    }
+    node
 }

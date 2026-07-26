@@ -152,8 +152,9 @@ Examples currently passing both suites: gcd, direction, div, option, result,
 ratio (struct), divmod (tuple), sum (for loop), geometry, closure, min
 (generic function), iter, inc (`&mut T` and `&T` parameters), geometry2
 (`&mut self` receiver), dot, hash (FNV-1a, extracted from
-`const-fnv1a-hash`). The `option` example also exercises a generic
-method (`Option::and`) and `&self` receiver.
+`const-fnv1a-hash`), random (PCG-XSH-RR, extracted from `oorandom`). The
+`option` example also exercises a generic method (`Option::and`) and `&self`
+receiver.
 
 ## Notes
 
@@ -190,21 +191,50 @@ method (`Option::and`) and `&self` receiver.
   rewrite (Zig rejects `%` on signed runtime ints), gated by `rem_is_signed`
   via `Scip::binary_type_at`. `peel_ref` and `is_signed_int` are local helpers
   in `expr.rs`.
+* An unhandled construct leaves a `TODO` marker rather than disappearing:
+  `// TODO: mod` for an item (named by `item_kind`), `/* TODO: expr */` for an
+  expression. The exception is `Item::Impl`, an intentional skip, since
+  `analyze` collects impls and emits them with their type. This matters most
+  for code the tests never call, where a silent drop would otherwise translate
+  to Zig that compiles and is simply missing something.
+* Declarations are separated by a blank line, except that a run of imports, or
+  a run of constants, prints as one block (`grouped` in `print/zig.rs`, and the
+  same rule for a container's associated consts in `container_body`).
 * Top-level `const` and `static` items become Zig `const` / `var` decls.
   Rust's `SCREAMING_SNAKE_CASE` becomes camelCase via `screaming_to_camel`,
   which is also how use sites are emitted (`Kind::Constant` and
-  `Kind::StaticVariable` in `translate_path`).
+  `Kind::StaticVariable` in `translate_path`). An associated `const` in an
+  `impl` block (`translate_associated_const`) becomes a container-level
+  `const`, printed ahead of the struct's fields; `Self::CONST` at the use site
+  needs no qualification, since the constant is already in scope there.
 * Integer literals keep their source spelling (`0x811c9dc5`, `1_000`), which
   Zig accepts; only a Rust type suffix is stripped, and then re-emitted as
   `@as(T, n)`.
-* `x as T` (`translate_cast`) emits `@as(T, x)`. This covers widening integer
-  casts only; narrowing needs `@truncate` and is TODO (see
-  `research/random.md`).
+* `x as T` (`translate_cast`) is one Rust operator over two Zig builtins:
+  widening emits `@as(T, x)`, narrowing emits `@truncate(x)` (whose result
+  type comes from the context, normally the `let` annotation). Choosing
+  between them needs the operand's type, which `expr_type` resolves for the
+  shapes SCIP answers directly (paths, method calls) plus the ones that pass
+  a type through (parens, casts, indexing, and the arithmetic/bitwise
+  operators — a shift takes its type from its left operand). An operand it
+  cannot resolve stays `@as`, which for a narrowing cast is a Zig compile
+  error rather than a silent miscompile. `int_bits` deliberately does not
+  answer for `usize` / `isize`, whose width is the target's.
 * Wrapping arithmetic: `x.wrapping_add/mul/sub(y)` maps to Zig's `+%` / `*%` /
   `-%` by moniker dispatch (`wrapping_op`), the same shape as `.len()`. Rust
   has no wrapping compound assignment, so `x = x.wrapping_mul(y)` is folded
   into `x *%= y` by `translate_wrapping_assign`; the fold is restricted to
   path and field places, where evaluating the place twice is harmless.
+  `x.wrapping_shl(n)` becomes plain `<<`, which already discards the bits
+  shifted out; the two disagree only when `n` is at or past the width, which
+  Rust reduces modulo the width and Zig rejects.
+* `x.rotate_right(n)` becomes `std.math.rotr(T, x, n)` (`translate_rotate`).
+  Unlike the other intrinsics this one needs `T` spelled out, so it is
+  resolved from the receiver via `expr_type`; an unresolvable receiver leaves
+  a plain method call rather than a wrong type argument.
+* Zig types a shift amount by the width of the value being shifted, so both
+  `<<` / `>>` and `wrapping_shl` emit the amount through `shift_amount`,
+  which wraps it in `@intCast`.
 * `&str` translates to `[]const u8` and `.as_bytes()` erases to its receiver,
   since a Zig string literal already is a byte slice.
 * A `match` on `core::option::Option` cannot become a switch, because Zig

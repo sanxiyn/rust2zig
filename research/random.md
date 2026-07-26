@@ -1,5 +1,12 @@
 # PCG random
 
+**Implemented (levels 1-2).** `rust/random` -> `zig/random.zig` passes both
+suites. The fixture that landed is `Rand32` with `rand_u32` plus the `new` /
+`new_inc` constructors, so both gaps below are done and level 2 came along with
+them. Level 3 (`Rand64` over `u128`) and level 4 (`rand_range`) are untouched.
+The extras this fixture forced beyond the two predicted gaps were associated
+`const` items in an `impl` block and `wrapping_shl`; see the README notes.
+
 Status and roadmap for a stateful-struct `.crate` target: `oorandom`
 (PCG-XSH-RR). Shares MVP scope and `.crate` ingestion notes with
 [isqrt.md](isqrt.md). This is the natural "next size up" from
@@ -106,17 +113,18 @@ const Rand32 = struct {
 };
 ```
 
-Details to confirm during implementation:
+Details confirmed during implementation:
 
-* **Operator precedence** of `*%` / `+%` in Zig vs the Rust method-chain
-  `.wrapping_mul(..).wrapping_add(..)`. The chain is strictly left-to-right;
-  ensure the emitted `a *% b +% c` groups as `(a *% b) +% c`. If Zig
-  precedence does not match, parenthesize explicitly during lowering.
-* Associated const naming: Rust `MULTIPLIER` (SCREAMING) -> Zig `multiplier`
-  (the name pass lower-cases?) — confirm the convention, or keep as-is.
-* `@truncate` target type is inferred from the `const xorshifted: u32`
-  annotation; make sure the annotation is emitted so `@truncate` has a
-  result type to resolve against.
+* **Operator precedence** of `*%` / `+%` matches the Rust method chain: `*%`
+  binds tighter than `+%`, so the emitted `oldstate *% multiplier +% self.inc`
+  groups as the chain does and needs no added parentheses. The behavioral test
+  is what actually pins this down.
+* Associated const naming follows the existing top-level convention:
+  `MULTIPLIER` -> `multiplier` via `screaming_to_camel`, use sites included.
+* `@truncate` does resolve its result type from the emitted `const
+  xorshifted: u32` annotation. This works because `let` bindings always carry
+  an annotation; a narrowing cast in a position with no expected type would
+  not have one to resolve against.
 
 ## Levels
 
@@ -155,10 +163,22 @@ Details to confirm during implementation:
 
 ## Next steps
 
-1. Land [hash.md](hash.md) level 1 first (wrapping arithmetic + `as`).
-2. Lay down `rust/random` + `zig/random.zig` level-1 golden pair.
-3. Implement narrowing `as` (`@truncate` arm of `syn::Expr::Cast`) and
-   `rotate_right` -> `std.math.rotr` (moniker dispatch).
-4. Check associated-const (`Self::CONST`) handling; add `Item::Const` if
-   missing.
-5. Then level 2 (`new`) / level 3 (`Rand64` / `u128`).
+Done: the golden pair, narrowing `as` -> `@truncate`, `rotate_right` ->
+`std.math.rotr`, associated consts, and (unforeseen) `wrapping_shl` -> `<<`.
+Level 2's `new` needed nothing new: the `let _ = rng.rand_u32();` discards
+already worked.
+
+Remaining here, in order of how much they buy:
+
+1. Level 3 (`Rand64` over `u128`) — the point of it is confirming `u128`
+   literals and arithmetic survive, which nothing has exercised yet.
+2. Level 4 (`rand_range`), which pulls in `core::ops::Range` outside a
+   for-loop.
+
+Two limits of the cast work worth recording, neither reachable from this
+fixture. A cast whose operand is a struct field (`self.state as u32`) does not
+resolve, because `Scip::type_at` answers for variables and parameters but not
+fields — it falls back to `@as`. And a cast that changes signedness needs
+`@bitCast` (same width) or a `@truncate` of matching signedness (narrowing);
+both currently emit `@as`. Each is a Zig compile error rather than a silent
+miscompile, which is why neither blocks anything yet.
