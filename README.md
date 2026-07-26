@@ -47,6 +47,16 @@ translated. Generated Zig should be suitable for human consumption.
 * `coverage.sh`: runs `test.sh` under `cargo-llvm-cov`, excluding the
   prost-generated `target/.../out/scip.rs` from the report. Output goes to
   `coverage/text/`; current findings are summarized in `coverage.md`.
+* `redundancy.sh`: measures each example's coverage in isolation (one
+  `test.sh` run per example) and reports which ones could be retired without
+  losing a single covered region. Per-example reports go to `coverage/pertest/`.
+  Accepts optional name arguments like the other scripts, in which case the
+  conclusions are relative to that subset. Coverage is one axis only: an
+  example is also a golden-file assertion and a `test_test.sh` equivalence
+  check, so the output is a candidate list, not a verdict.
+* `redundancy.py`: the analysis behind `redundancy.sh`, split out so it can be
+  re-run without re-measuring (`python3 redundancy.py coverage/pertest`).
+  Tables are sized from their content by the ElasticTabstops package.
 
 ### Desugaring phase
 
