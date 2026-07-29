@@ -14,7 +14,7 @@ const Rand32 = struct {
     }
 
     fn newInc(seed: u64, increment: u64) Self {
-        var rng: Rand32 = Self{ .state = 0, .inc = increment << @intCast(1) | 1 };
+        var rng: Rand32 = Self{ .state = 0, .inc = increment << 1 | 1 };
         _ = rng.randU32();
         rng.state +%= seed;
         _ = rng.randU32();
@@ -24,8 +24,8 @@ const Rand32 = struct {
     fn randU32(self: *Self) u32 {
         const oldstate: u64 = self.state;
         self.state = oldstate *% multiplier +% self.inc;
-        const xorshifted: u32 = @truncate(((oldstate >> @intCast(18)) ^ oldstate) >> @intCast(27));
-        const rot: u32 = @truncate(oldstate >> @intCast(59));
+        const xorshifted: u32 = @truncate(((oldstate >> 18) ^ oldstate) >> 27);
+        const rot: u32 = @truncate(oldstate >> 59);
         return std.math.rotr(u32, xorshifted, rot);
     }
 };

@@ -139,7 +139,14 @@ impl Translator {
     }
 
     pub fn shift_amount(&self, expr: &syn::Expr) -> Node {
-        Node::BuiltinCall("intCast".to_string(), vec![self.translate_expr(expr)])
+        if matches!(expr, syn::Expr::Lit(_)) {
+            self.translate_expr(expr)
+        } else {
+            Node::BuiltinCall(
+                "intCast".to_string(),
+                vec![self.translate_expr(expr)],
+            )
+        }
     }
 
     fn translate_cast(&self, ec: &syn::ExprCast) -> Node {
