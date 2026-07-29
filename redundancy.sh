@@ -23,6 +23,7 @@ for name in $names; do
     fi
     cargo llvm-cov clean --profraw-only
     ./test.sh "$name" > /dev/null
+    ./test_ml.sh "$name" > /dev/null
     cargo llvm-cov report $IGNORE --json --output-path "$OUT/${name}.json" 2> /dev/null
     echo "MEASURED $name"
 done

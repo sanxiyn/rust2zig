@@ -21,6 +21,9 @@ fn rewrite(expr: &syn::Expr) -> Option<syn::Expr> {
     let right = (*eb.right).clone();
     let new: syn::Expr = match &eb.op {
         syn::BinOp::AddAssign(_) => syn::parse_quote!(#left = #left + #right),
+        syn::BinOp::BitAndAssign(_) => syn::parse_quote!(#left = #left & #right),
+        syn::BinOp::BitOrAssign(_) => syn::parse_quote!(#left = #left | #right),
+        syn::BinOp::BitXorAssign(_) => syn::parse_quote!(#left = #left ^ #right),
         syn::BinOp::DivAssign(_) => syn::parse_quote!(#left = #left / #right),
         syn::BinOp::MulAssign(_) => syn::parse_quote!(#left = #left * #right),
         syn::BinOp::RemAssign(_) => syn::parse_quote!(#left = #left % #right),
