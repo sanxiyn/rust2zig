@@ -316,7 +316,7 @@ impl Translator {
                     return None;
                 }
                 let syn::Pat::Ident(pi) = &pts.elems[0] else { return None };
-                Some(OptionPat::Some(self.rename_ident(&pi.ident)))
+                Some(OptionPat::Some(pi.ident.to_string()))
             }
             syn::Pat::Path(pp)
                 if self.check_moniker(&pp.path, "core::option::Option::None") =>

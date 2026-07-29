@@ -10,7 +10,6 @@ mod generic;
 mod item;
 mod mac;
 mod pat;
-mod rename;
 mod stmt;
 mod ty;
 
@@ -138,7 +137,6 @@ impl Translator {
             }
         }
 
-        self.collect_renames(file);
         self.collect_drop_infos(file);
     }
 
@@ -181,7 +179,7 @@ impl Translator {
                             }
                         }
                     }
-                    let name = self.rename_ident(ident);
+                    let name = ident.to_string();
                     Node::Identifier(name)
                 } else if matches!(kind, Some(Kind::Method) | Some(Kind::StaticMethod))
                     && path.segments.len() > 1

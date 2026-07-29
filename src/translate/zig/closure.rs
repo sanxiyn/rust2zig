@@ -71,20 +71,21 @@ impl Translator {
     }
 
     pub fn translate_closure_local(&self, pi: &syn::PatIdent, ec: &syn::ExprClosure) -> Node {
-        let name = self.rename_ident(&pi.ident);
+        let name = pi.ident.to_string();
         let captures = self.collect_captures(ec);
         let capture_fields: Vec<Field> = captures.iter().map(|(ident, ty)| Field {
-            name: self.rename_ident(ident),
+            name: ident.to_string(),
             ty: self.translate_type(ty),
         }).collect();
         let has_self = !captures.is_empty();
         let params = ec.inputs.iter().filter_map(|input| {
             let syn::Pat::Ident(pi) = input else { return None };
+            let name = pi.ident.to_string();
             let ty = match self.scip.type_at(&pi.ident.span().into()) {
                 Some(ty) => self.translate_type(&ty),
                 None => Node::Todo("type".to_string()),
             };
-            Some(Param { comptime: false, name: self.rename_ident(&pi.ident), ty })
+            Some(Param { comptime: false, name, ty })
         }).collect();
         let return_type = match self.closure_return_type(&pi.ident) {
             Some(ty) => self.translate_type(&ty),

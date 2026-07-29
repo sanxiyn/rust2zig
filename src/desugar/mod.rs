@@ -4,6 +4,7 @@ mod compound_assignment;
 mod generic;
 mod integer_literal;
 mod match_ergonomics;
+mod shadowing;
 
 use crate::scip::Scip;
 
@@ -12,5 +13,6 @@ pub fn desugar(scip: &Scip, mut file: syn::File) -> syn::File {
     integer_literal::run(scip, &mut file);
     match_ergonomics::run(scip, &mut file);
     generic::run(scip, &mut file);
+    shadowing::run(scip, &mut file);
     file
 }

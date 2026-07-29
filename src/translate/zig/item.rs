@@ -158,7 +158,7 @@ impl Translator {
         for arg in &f.sig.inputs {
             if let syn::FnArg::Typed(pat_type) = arg {
                 if let syn::Pat::Ident(pi) = &*pat_type.pat {
-                    let name = self.rename_ident(&pi.ident);
+                    let name = pi.ident.to_string();
                     if pi.mutability.is_some() {
                         rebind_params.push((name, false, false));
                     } else {
@@ -221,7 +221,7 @@ impl Translator {
             }
             syn::FnArg::Typed(pat_type) => {
                 let name = if let syn::Pat::Ident(pi) = &*pat_type.pat {
-                    let name = self.rename_ident(&pi.ident);
+                    let name = pi.ident.to_string();
                     if rebind_params.contains(&name) {
                         format!("_{}", name)
                     } else {

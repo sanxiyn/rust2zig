@@ -1,39 +1,27 @@
 use std::collections::{HashMap, HashSet};
 
+use syn::punctuated::Punctuated;
+use syn::visit::Visit;
+use syn::visit_mut::VisitMut;
+
 use crate::scip::{Range, Scip};
-use super::Translator;
 
-impl Translator {
-    pub fn rename_ident(&self, ident: &syn::Ident) -> String {
-        let range: Range = ident.span().into();
-        if let Some(symbol) = self.scip.symbol_at(&range) {
-            if let Some(name) = self.renames.get(symbol) {
-                return name.clone();
-            }
-        }
-        ident.to_string()
+pub fn run(scip: &Scip, file: &mut syn::File) {
+    let mut collector = Collect { scip, renames: Default::default(), stack: Default::default() };
+    collector.visit_file(file);
+    if collector.renames.is_empty() {
+        return;
     }
-
-    pub fn collect_renames(&mut self, file: &syn::File) {
-        use syn::visit::Visit;
-
-        let mut collector = Collector {
-            scip: &self.scip,
-            renames: Default::default(),
-            stack: Default::default(),
-        };
-        collector.visit_file(file);
-        self.renames = collector.renames;
-    }
+    Apply { scip, renames: collector.renames, changed: false }.visit_file_mut(file);
 }
 
-struct Collector<'a> {
+struct Collect<'a> {
     scip: &'a Scip,
     renames: HashMap<String, String>,
     stack: Vec<HashSet<String>>,
 }
 
-impl Collector<'_> {
+impl Collect<'_> {
     fn bind_ident(&mut self, ident: &syn::Ident) {
         let original = ident.to_string();
         let range: Range = ident.span().into();
@@ -76,7 +64,7 @@ impl Collector<'_> {
     }
 }
 
-impl<'ast> syn::visit::Visit<'ast> for Collector<'_> {
+impl<'ast> syn::visit::Visit<'ast> for Collect<'_> {
     fn visit_item_fn(&mut self, f: &'ast syn::ItemFn) {
         self.stack.push(Default::default());
         for arg in &f.sig.inputs {
@@ -155,5 +143,37 @@ impl<'ast> syn::visit::Visit<'ast> for Collector<'_> {
             syn::visit::visit_expr(self, &arm.body);
             self.stack.pop();
         }
+    }
+}
+
+struct Apply<'a> {
+    scip: &'a Scip,
+    renames: HashMap<String, String>,
+    changed: bool,
+}
+
+impl syn::visit_mut::VisitMut for Apply<'_> {
+    fn visit_ident_mut(&mut self, ident: &mut syn::Ident) {
+        let range: Range = ident.span().into();
+        if let Some(symbol) = self.scip.symbol_at(&range) {
+            if let Some(name) = self.renames.get(symbol) {
+                *ident = syn::Ident::new(name, ident.span());
+                self.changed = true;
+            }
+        }
+    }
+
+    fn visit_macro_mut(&mut self, mac: &mut syn::Macro) {
+        use syn::parse::Parser;
+        let parser = Punctuated::<syn::Expr, syn::Token![,]>::parse_terminated;
+        let Ok(mut args) = parser.parse2(mac.tokens.clone()) else { return };
+        let outer = std::mem::replace(&mut self.changed, false);
+        for arg in &mut args {
+            self.visit_expr_mut(arg);
+        }
+        if self.changed {
+            mac.tokens = quote::quote! { #args };
+        }
+        self.changed |= outer;
     }
 }

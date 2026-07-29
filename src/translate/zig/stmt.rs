@@ -83,7 +83,7 @@ impl Translator {
             expr: Some(Box::new(expr)),
         });
         if needs_flag {
-            let zig_name = self.rename_ident(&pi.ident);
+            let zig_name = pi.ident.to_string();
             nodes.push(Node::SimpleVarDecl {
                 var: Var {
                     is_const: false,
@@ -94,7 +94,7 @@ impl Translator {
             });
             nodes.push(self.conditional_defer(&zig_name));
         } else if needs_defer {
-            let zig_name = self.rename_ident(&pi.ident);
+            let zig_name = pi.ident.to_string();
             nodes.push(Node::Defer(Box::new(self.drop_call(&zig_name))));
         }
         nodes
@@ -102,7 +102,7 @@ impl Translator {
 
     fn var_of(&self, pi: &syn::PatIdent, force_var: bool) -> Var {
         let is_const = pi.mutability.is_none() && !force_var;
-        let name = self.rename_ident(&pi.ident);
+        let name = pi.ident.to_string();
         let ty = if let Some(ty) = self.scip.type_at(&pi.ident.span().into()) {
             let ty = self.translate_type(&ty);
             Some(Box::new(ty))

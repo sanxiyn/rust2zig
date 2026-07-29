@@ -15,7 +15,7 @@ pub struct Capture {
 impl Translator {
     pub fn pat_name(&self, pat: &syn::Pat) -> String {
         match pat {
-            syn::Pat::Ident(pi) => self.rename_ident(&pi.ident),
+            syn::Pat::Ident(pi) => pi.ident.to_string(),
             _ => "_".to_string(),
         }
     }
@@ -33,7 +33,7 @@ impl Translator {
                     if let syn::Member::Named(ident) = &field.member {
                         if let syn::Pat::Ident(pi) = &*field.pat {
                             captures.push(Capture {
-                                name: self.rename_ident(&pi.ident),
+                                name: pi.ident.to_string(),
                                 accessor: Accessor::Field(ident.to_string()),
                                 by_ref: pi.by_ref.is_some(),
                             });
@@ -48,7 +48,7 @@ impl Translator {
                 for (i, elem) in pts.elems.iter().enumerate() {
                     if let syn::Pat::Ident(pi) = elem {
                         captures.push(Capture {
-                            name: self.rename_ident(&pi.ident),
+                            name: pi.ident.to_string(),
                             accessor: Accessor::Index(i),
                             by_ref: pi.by_ref.is_some(),
                         });

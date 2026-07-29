@@ -75,7 +75,7 @@ impl Translator {
         let syn::Pat::Ident(pi) = &*efl.pat else {
             return Node::Todo("for".to_string());
         };
-        let name = self.rename_ident(&pi.ident);
+        let name = pi.ident.to_string();
         let ty = self.scip.type_at(&pi.ident.span().into());
         let preamble = match ty {
             Some(ty) => Node::SimpleVarDecl {
