@@ -155,16 +155,22 @@ files are regenerated from translator output after each change.
 corresponding translated Zig file. This ensures the input/output pairs used
 to test the translator are in fact equivalent.
 
-Both suites accept optional name arguments (e.g. `./test.sh gcd divmod`) to
+Both suites accept optional name arguments (e.g. `./test.sh gcd sum`) to
 run a subset; with no arguments, all examples run.
 
-Examples currently passing both suites: gcd, direction, div, option, result,
-ratio (struct), divmod (tuple), sum (for loop), geometry, closure, min
-(generic function), iter, inc (`&mut T` and `&T` parameters), geometry2
-(`&mut self` receiver), dot, hash (FNV-1a, extracted from
+Examples currently passing both suites: gcd, direction (plain enum), div,
+option (generic enum), sum (for loop), geometry, geometry2 (`&mut self`
+receiver), closure, iter, inc (`&mut T` and `&T` parameters), dot
+(`std::iter::zip`), bitset (bit manipulation on a struct), drop and drop2
+(`Drop` elaboration, see `DROP.md`), hash (FNV-1a, extracted from
 `const-fnv1a-hash`), random (PCG-XSH-RR, extracted from `oorandom`). The
 `option` example also exercises a generic method (`Option::and`) and `&self`
 receiver.
+
+`divmod`, `min`, `ratio`, and `result` were retired once `redundancy.sh`
+showed they covered no region the rest of the suite did not; tuples, generic
+functions, and generic data-carrying enums are still exercised by `geometry`,
+`iter`, and `option` respectively.
 
 ## Notes
 

@@ -1,13 +1,18 @@
 # Coverage Report
 
-Run via `./coverage.sh`, which runs `test.sh` (all 20 fixtures: bitset,
-closure, direction, div, divmod, dot, drop, drop2, gcd, geometry, geometry2,
-hash, inc, iter, min, option, random, ratio, result, sum) under
-`cargo-llvm-cov`, with the prost-generated `target/.../out/scip.rs` excluded via
+Run via `./coverage.sh`, which runs `test.sh` (all 16 fixtures: bitset,
+closure, direction, div, dot, drop, drop2, gcd, geometry, geometry2, hash,
+inc, iter, option, random, sum) under `cargo-llvm-cov`, with the
+prost-generated `target/.../out/scip.rs` excluded via
 `--ignore-filename-regex`.
 
 Totals: **91.0% regions (5276/5800), 90.4% lines (2565/2836), 94.9% functions
 (260/274)**.
+
+These are the same numbers the suite produced before `divmod`, `min`, `ratio`,
+and `result` were retired: every per-file figure below is unchanged, which is
+what `redundancy.sh` predicted when it found those four covered no region the
+rest of the suite did not.
 
 | File | Regions | Lines | Functions |
 |---|---|---|---|
