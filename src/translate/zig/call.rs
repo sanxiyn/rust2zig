@@ -18,6 +18,9 @@ impl Translator {
             if self.check_moniker(&ep.path, "core::option::Option::Some") {
                 return self.translate_expr(&ec.args[0]);
             }
+            if self.check_moniker(&ep.path, "core::cell::Cell::new") {
+                return self.translate_expr(&ec.args[0]);
+            }
             if self.check_moniker(&ep.path, "core::mem::drop") {
                 let arg = self.translate_expr(&ec.args[0]);
                 return Node::Call(
@@ -84,6 +87,14 @@ impl Translator {
         }
         if self.check_moniker_ident(&emc.method, "core::str::as_bytes") {
             return self.translate_expr(&emc.receiver);
+        }
+        if self.check_moniker_ident(&emc.method, "core::cell::Cell::get") {
+            return self.translate_expr(&emc.receiver);
+        }
+        if self.check_moniker_ident(&emc.method, "core::cell::Cell::set") {
+            let place = self.translate_expr(&emc.receiver);
+            let value = self.translate_expr(&emc.args[0]);
+            return Node::Assign(Box::new(place), Box::new(value));
         }
         if let Some(node) = self.translate_wrapping(emc) {
             return node;

@@ -289,6 +289,7 @@ impl Translator {
                         Box::new(Node::Identifier(payload.clone())),
                         field.clone(),
                     ),
+                    Accessor::Whole => Node::Identifier(payload.clone()),
                 };
                 if capture.by_ref {
                     access = Node::AddressOf(Box::new(access));
@@ -477,7 +478,7 @@ fn int_literal(li: &syn::LitInt) -> String {
     }
 }
 
-fn peel_ref(ty: &syn::Type) -> &syn::Type {
+pub fn peel_ref(ty: &syn::Type) -> &syn::Type {
     match ty {
         syn::Type::Reference(tr) => &tr.elem,
         _ => ty,

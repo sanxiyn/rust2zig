@@ -2,6 +2,7 @@ use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 
 mod call;
+mod cell;
 mod closure;
 mod drop;
 mod expr;
@@ -38,6 +39,7 @@ pub struct Translator {
     pub enums: HashMap<String, Enum>,
     pub generic_fns: HashMap<String, GenericFn>,
     pub renames: HashMap<String, String>,
+    pub cell_types: HashSet<String>,
     pub drop_types: HashSet<String>,
     pub drop_infos: HashMap<String, DropInfo>,
     pub capture_stack: RefCell<Vec<HashMap<String, String>>>,
@@ -51,6 +53,7 @@ impl Translator {
             enums: Default::default(),
             generic_fns: Default::default(),
             renames: Default::default(),
+            cell_types: Default::default(),
             drop_types: Default::default(),
             drop_infos: Default::default(),
             capture_stack: Default::default(),
@@ -67,6 +70,10 @@ impl Translator {
         let range = ident.span().into();
         let Some(symbol) = self.scip.symbol_at(&range) else { return false };
         let suffix = match expected {
+            "core::cell::Cell" => "cell/Cell#",
+            "core::cell::Cell::get" => "cell/impl#[`Cell<T>`]get().",
+            "core::cell::Cell::new" => "cell/impl#[`Cell<T>`]new().",
+            "core::cell::Cell::set" => "cell/impl#[`Cell<T>`]set().",
             "core::iter::Iterator::enumerate" => "iter/traits/iterator/Iterator#enumerate().",
             "core::macros::assert_eq" => "macros/assert_eq!",
             "core::mem::drop" => "mem/drop().",
@@ -137,6 +144,7 @@ impl Translator {
             }
         }
 
+        self.collect_cell_types(file);
         self.collect_drop_infos(file);
     }
 

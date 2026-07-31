@@ -311,7 +311,11 @@ impl Printer {
         self.out.push_str(&format!("switch ({}) {{\n", self.expr(cond)));
         self.indent();
         for arm in arms {
-            self.out.push_str(&format!("{}{} => ", self.pad(), self.expr(&arm.pattern)));
+            let pattern = match &arm.pattern {
+                Some(pattern) => self.expr(pattern),
+                None => "else".to_string(),
+            };
+            self.out.push_str(&format!("{}{} => ", self.pad(), pattern));
             if let Some(capture) = &arm.capture {
                 let star = if capture.by_ref { "*" } else { "" };
                 self.out.push_str(&format!("|{}{}| ", star, capture.name));

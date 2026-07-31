@@ -4,6 +4,9 @@ use super::Translator;
 impl Translator {
     pub fn translate_pat(&self, pat: &syn::Pat) -> Pattern {
         match pat {
+            syn::Pat::Ident(pi) if self.is_variant(&syn::Path::from(pi.ident.clone())) => {
+                Pattern::Construct(Longident::Lident(pi.ident.to_string()), None)
+            }
             syn::Pat::Ident(pi) => Pattern::Var(pi.ident.to_string()),
             syn::Pat::Path(pp) if self.is_variant(&pp.path) => {
                 let name = pp.path.segments.last().unwrap().ident.to_string();

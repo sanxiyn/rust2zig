@@ -1,0 +1,16 @@
+Explore the project and give me a summary.
+Write research/regex.md based on manually extracted rust/regex.
+Let's handle syn::Pat::Ident and syn::Pat::Wild first, as you suggested.
+Let's think about what to do with Cell, first for Zig.
+For moment, could we change rust/regex ParserI to always take &mut Parser and don't deal with Borrow?
+Please use Edit tool so that I can review, instead of writing Python scripts.
+Fix lifetime-only generics.
+Inlining idea sounds wrong to me. What are alternatives?
+B looks good. Write the design and alternatives to CELL.md, like DROP.md.
+Time to implement. Let's do it all at once: analysis, type translation, receiver translation, and new/get/set translation.
+Yes, update CELL.md to note the limitation.
+Update research/regex.md as well.
+Let's think about what to do with Result more carefully. I agree it is tempting to translate to Zig error union, but does that work? Doesn't Zig error only can be enum and can't have payload?
+Write this up to RESULT.md, with payload-free translation, tagged union fallback, and idiomatic out-of-band translation, and cross reference accordingly.
+How do you think things are going so far?
+/exit

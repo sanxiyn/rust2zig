@@ -19,6 +19,17 @@ impl Translator {
                     | "u8" | "u16" | "u32" | "u64" | "u128" | "usize" => {
                         Node::Identifier(name)
                     }
+                    _ if self.check_moniker(&tp.path, "core::cell::Cell") => {
+                        if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
+                            if let Some(syn::GenericArgument::Type(inner_ty)) = args.args.first() {
+                                self.translate_type(inner_ty)
+                            } else {
+                                Node::Todo("type".to_string())
+                            }
+                        } else {
+                            Node::Todo("type".to_string())
+                        }
+                    }
                     _ if self.check_moniker(&tp.path, "core::option::Option") => {
                         if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
                             if let Some(syn::GenericArgument::Type(inner_ty)) = args.args.first() {
@@ -33,7 +44,6 @@ impl Translator {
                     }
                     _ => {
                         if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
-                            let type_constructor = Node::Identifier(name);
                             let mut type_args = vec![];
                             for arg in &args.args {
                                 if let syn::GenericArgument::Type(arg_ty) = arg {
@@ -41,7 +51,12 @@ impl Translator {
                                     type_args.push(type_arg);
                                 }
                             }
-                            Node::Call(Box::new(type_constructor), type_args)
+                            if type_args.is_empty() {
+                                Node::Identifier(name)
+                            } else {
+                                let type_constructor = Node::Identifier(name);
+                                Node::Call(Box::new(type_constructor), type_args)
+                            }
                         } else {
                             Node::Identifier(name)
                         }
@@ -54,16 +69,12 @@ impl Translator {
                     Node::SliceType(Box::new(ty))
                 } else if is_str(&tr.elem) {
                     Node::SliceType(Box::new(Node::Identifier("u8".to_string())))
-                } else if tr.mutability.is_some() {
-                    let ty = self.translate_type(&tr.elem);
-                    Node::PtrType {
-                        is_const: false,
-                        ty: Box::new(ty),
-                    }
                 } else {
                     let ty = self.translate_type(&tr.elem);
+                    let is_const = tr.mutability.is_none()
+                        && !self.is_cell_bearing(&tr.elem);
                     Node::PtrType {
-                        is_const: true,
+                        is_const,
                         ty: Box::new(ty),
                     }
                 }

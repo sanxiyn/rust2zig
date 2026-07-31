@@ -217,7 +217,7 @@ pub struct Param {
 }
 
 pub struct SwitchArm {
-    pub pattern: Node,
+    pub pattern: Option<Node>,
     pub capture: Option<Capture>,
     pub body: SwitchBody,
 }

@@ -212,7 +212,8 @@ impl Translator {
             syn::FnArg::Receiver(receiver) => {
                 let self_ty = Node::Identifier("Self".to_string());
                 let ty = if receiver.reference.is_some() {
-                    let is_const = receiver.mutability.is_none();
+                    let is_const = receiver.mutability.is_none()
+                        && !self.receiver_is_cell_bearing(receiver);
                     Node::PtrType { is_const, ty: Box::new(self_ty) }
                 } else {
                     self_ty
