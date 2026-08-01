@@ -178,6 +178,7 @@ impl Translator {
             cond: Box::new(cond),
             capture: None,
             then_branch: Box::new(then_branch),
+            else_capture: None,
             else_branch: else_branch,
         }
     }
@@ -204,6 +205,7 @@ impl Translator {
             cond: Box::new(cond),
             capture: Some(capture),
             then_branch: Box::new(then_branch),
+            else_capture: None,
             else_branch: else_branch,
         })
     }

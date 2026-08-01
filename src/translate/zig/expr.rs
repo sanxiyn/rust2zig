@@ -47,6 +47,7 @@ impl Translator {
             syn::Expr::Repeat(er) => self.translate_repeat(er),
             syn::Expr::Return(er) => self.translate_return(er),
             syn::Expr::Struct(es) => self.translate_struct_expr(es),
+            syn::Expr::Try(et) => self.translate_try(et),
             syn::Expr::Tuple(et) => self.translate_tuple(et),
             syn::Expr::Unary(eu) => self.translate_unary(eu),
             syn::Expr::Unsafe(eu) => self.translate_block_expr(&eu.block),
@@ -173,6 +174,11 @@ impl Translator {
     pub fn expr_type(&self, expr: &syn::Expr) -> Option<syn::Type> {
         match expr {
             syn::Expr::Binary(eb) => self.binary_expr_type(eb),
+            syn::Expr::Call(ec) => {
+                let syn::Expr::Path(ep) = &*ec.func else { return None };
+                let ident = &ep.path.segments.last()?.ident;
+                self.scip.return_type_at(&ident.span().into())
+            }
             syn::Expr::Cast(ec) => Some((*ec.ty).clone()),
             syn::Expr::Index(ei) => match peel_ref(&self.expr_type(&ei.expr)?) {
                 syn::Type::Array(ta) => Some((*ta.elem).clone()),
@@ -255,6 +261,10 @@ impl Translator {
         });
         if is_option {
             return self.translate_match_option(em);
+        }
+        let is_result = em.arms.iter().any(|arm| self.result_pat(&arm.pat).is_some());
+        if is_result {
+            return self.translate_match_result(em);
         }
         let cond = Box::new(self.translate_expr(&em.expr));
         let arms = em.arms.iter().map(|arm| self.translate_match_arm(arm)).collect();
@@ -357,6 +367,7 @@ impl Translator {
                         cond: Box::new(guard),
                         capture: None,
                         then_branch: Box::new(Node::Block(vec![break_])),
+                        else_capture: None,
                         else_branch: None,
                     };
                     (scrutinee, Some(name), inner)
@@ -384,6 +395,7 @@ impl Translator {
                 cond,
                 capture,
                 then_branch: Box::new(Node::Block(vec![then_branch])),
+                else_capture: None,
                 else_branch: None,
             });
         }

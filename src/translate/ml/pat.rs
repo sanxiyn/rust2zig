@@ -9,11 +9,11 @@ impl Translator {
             }
             syn::Pat::Ident(pi) => Pattern::Var(pi.ident.to_string()),
             syn::Pat::Path(pp) if self.is_variant(&pp.path) => {
-                let name = pp.path.segments.last().unwrap().ident.to_string();
+                let name = self.variant_name(&pp.path);
                 Pattern::Construct(Longident::Lident(name), None)
             }
             syn::Pat::Struct(ps) if self.is_variant(&ps.path) => {
-                let name = ps.path.segments.last().unwrap().ident.to_string();
+                let name = self.variant_name(&ps.path);
                 let mut fields = vec![];
                 for field in &ps.fields {
                     if let syn::Member::Named(ident) = &field.member {
@@ -28,7 +28,7 @@ impl Translator {
                 Pattern::Tuple(pt.elems.iter().map(|elem| self.translate_pat(elem)).collect())
             }
             syn::Pat::TupleStruct(pts) if self.is_variant(&pts.path) => {
-                let name = pts.path.segments.last().unwrap().ident.to_string();
+                let name = self.variant_name(&pts.path);
                 let arg = match pts.elems.len() {
                     0 => None,
                     1 => Some(Box::new(self.translate_pat(&pts.elems[0]))),

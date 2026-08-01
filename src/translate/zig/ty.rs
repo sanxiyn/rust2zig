@@ -3,6 +3,14 @@ use super::Translator;
 
 impl Translator {
     pub fn translate_type(&self, ty: &syn::Type) -> Node {
+        if let Some((ok, error)) = self.result_types(ty) {
+            if !self.is_error_set(&error) {
+                return Node::Todo("type".to_string());
+            }
+            let error = self.translate_type(&error);
+            let ok = self.translate_type(&ok);
+            return Node::ErrorUnion(Box::new(error), Box::new(ok));
+        }
         match ty {
             syn::Type::Array(ta) => {
                 let len = self.translate_expr(&ta.len);

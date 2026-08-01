@@ -18,6 +18,12 @@ impl Translator {
             if self.check_moniker(&ep.path, "core::option::Option::Some") {
                 return self.translate_expr(&ec.args[0]);
             }
+            if self.check_moniker(&ep.path, "core::result::Result::Ok") {
+                return self.translate_expr(&ec.args[0]);
+            }
+            if self.check_moniker(&ep.path, "core::result::Result::Err") {
+                return self.translate_err(&ec.args[0]);
+            }
             if self.check_moniker(&ep.path, "core::cell::Cell::new") {
                 return self.translate_expr(&ec.args[0]);
             }
@@ -87,6 +93,10 @@ impl Translator {
         }
         if self.check_moniker_ident(&emc.method, "core::str::as_bytes") {
             return self.translate_expr(&emc.receiver);
+        }
+        if self.check_moniker_ident(&emc.method, "core::result::Result::unwrap") {
+            let base = self.translate_expr(&emc.receiver);
+            return Node::Try(Box::new(base));
         }
         if self.check_moniker_ident(&emc.method, "core::cell::Cell::get") {
             return self.translate_expr(&emc.receiver);

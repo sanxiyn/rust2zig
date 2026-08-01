@@ -205,7 +205,7 @@ impl Printer {
                 self.block(body);
                 self.out.push('\n');
             }
-            Node::If { cond, capture, then_branch, else_branch } => {
+            Node::If { cond, capture, then_branch, else_capture, else_branch } => {
                 self.out.push_str(&format!("{}if ({}) ", pad, self.expr(cond)));
                 if let Some(capture) = capture {
                     self.out.push_str(&format!("|{}| ", capture));
@@ -213,6 +213,9 @@ impl Printer {
                 self.block(then_branch);
                 if let Some(else_branch) = else_branch {
                     self.out.push_str(" else ");
+                    if let Some(else_capture) = else_capture {
+                        self.out.push_str(&format!("|{}| ", else_capture));
+                    }
                     self.block(else_branch);
                 }
                 self.out.push('\n');
@@ -265,10 +268,35 @@ impl Printer {
             }
             Node::Switch { cond, arms } => self.switch(cond, arms),
             Node::BlockExpr { stmts, result } => self.block_expr(stmts, result),
+            Node::If { cond, capture, then_branch, else_capture, else_branch } => {
+                self.if_expr(cond, capture, then_branch, else_capture, else_branch.as_deref())
+            }
             _ => {
                 let text = self.expr(node);
                 self.out.push_str(&text);
             }
+        }
+    }
+
+    fn if_expr(
+        &mut self,
+        cond: &Node,
+        capture: &Option<String>,
+        then_branch: &Node,
+        else_capture: &Option<String>,
+        else_branch: Option<&Node>,
+    ) {
+        self.out.push_str(&format!("if ({}) ", self.expr(cond)));
+        if let Some(capture) = capture {
+            self.out.push_str(&format!("|{}| ", capture));
+        }
+        self.value(then_branch);
+        if let Some(else_branch) = else_branch {
+            self.out.push_str(" else ");
+            if let Some(else_capture) = else_capture {
+                self.out.push_str(&format!("|{}| ", else_capture));
+            }
+            self.value(else_branch);
         }
     }
 
@@ -371,6 +399,7 @@ impl Printer {
             Node::Mod(left, right) |
             Node::Mul(left, right) |
             Node::MulWrap(left, right) |
+            Node::Orelse(left, right) |
             Node::Shl(left, right) |
             Node::Shr(left, right) |
             Node::Sub(left, right) |
@@ -414,6 +443,7 @@ impl Printer {
             Node::Continue => "continue".to_string(),
             Node::Deref(expr) => format!("{}.*", self.expr(expr)),
             Node::EnumLiteral(name) => format!(".{}", name),
+            Node::ErrorValue(name) => format!("error.{}", name),
             Node::FieldAccess(base, field) => format!("{}.{}", self.expr(base), field),
             Node::ForRange(start, end) => {
                 let start = self.expr(start);
@@ -423,6 +453,10 @@ impl Printer {
             Node::GroupedExpression(expr) => format!("({})", self.expr(expr)),
             Node::Identifier(name) => name.clone(),
             Node::NumberLiteral(text) => text.clone(),
+            Node::Return(expr) => match expr {
+                Some(expr) => format!("return {}", self.expr(expr)),
+                None => "return".to_string(),
+            },
             Node::StringLiteral(text) => format!("\"{}\"", text),
             Node::StructInit(ty, fields) => {
                 let ty = if let Some(ty) = ty { self.expr(ty) } else { ".".to_string() };
@@ -434,6 +468,13 @@ impl Printer {
             Node::Try(expr) => format!("try {}", self.expr(expr)),
 
             Node::ArrayType(len, ty) => format!("[{}]{}", self.expr(len), self.expr(ty)),
+            Node::ErrorSetDecl(members) => match members.as_slice() {
+                [member] => format!("error{{{}}}", member),
+                members => format!("error{{ {} }}", members.join(", ")),
+            },
+            Node::ErrorUnion(error, payload) => {
+                format!("{}!{}", self.expr(error), self.expr(payload))
+            }
             Node::OptionalType(ty) => format!("?{}", self.expr(ty)),
             Node::PtrType { is_const, ty } => {
                 let prefix = if *is_const { "*const " } else { "*" };
@@ -485,6 +526,7 @@ impl Printer {
             Node::Mod(..) => "%",
             Node::Mul(..) => "*",
             Node::MulWrap(..) => "*%",
+            Node::Orelse(..) => "orelse",
             Node::Shl(..) => "<<",
             Node::Shr(..) => ">>",
             Node::Sub(..) => "-",

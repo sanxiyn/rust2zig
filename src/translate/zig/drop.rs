@@ -61,6 +61,7 @@ impl Translator {
             cond: Box::new(alive),
             capture: None,
             then_branch: Box::new(Node::Block(vec![drop])),
+            else_capture: None,
             else_branch: None,
         }])))
     }

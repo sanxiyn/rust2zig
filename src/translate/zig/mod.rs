@@ -11,11 +11,12 @@ mod generic;
 mod item;
 mod mac;
 mod pat;
+mod result;
 mod stmt;
 mod ty;
 
 use crate::ast::zig::{Node, Var};
-use crate::scip::{Kind, Scip};
+use crate::scip::{Kind, Range, Scip};
 use crate::translate::name::{camel_to_snake, screaming_to_camel, snake_to_camel};
 use drop::DropInfo;
 use generic::GenericFn;
@@ -26,6 +27,7 @@ pub enum PathMode {
 }
 
 pub struct Struct {
+    pub has_fields: bool,
     pub impls: Vec<syn::ItemImpl>,
 }
 
@@ -38,6 +40,8 @@ pub struct Translator {
     pub structs: HashMap<String, Struct>,
     pub enums: HashMap<String, Enum>,
     pub generic_fns: HashMap<String, GenericFn>,
+    pub error_types: HashSet<String>,
+    pub error_scope: RefCell<Option<String>>,
     pub renames: HashMap<String, String>,
     pub cell_types: HashSet<String>,
     pub drop_types: HashSet<String>,
@@ -52,6 +56,8 @@ impl Translator {
             structs: Default::default(),
             enums: Default::default(),
             generic_fns: Default::default(),
+            error_types: Default::default(),
+            error_scope: Default::default(),
             renames: Default::default(),
             cell_types: Default::default(),
             drop_types: Default::default(),
@@ -67,8 +73,11 @@ impl Translator {
     }
 
     pub fn check_moniker_ident(&self, ident: &syn::Ident, expected: &str) -> bool {
-        let range = ident.span().into();
-        let Some(symbol) = self.scip.symbol_at(&range) else { return false };
+        self.check_moniker_at(&ident.span().into(), expected)
+    }
+
+    pub fn check_moniker_at(&self, range: &Range, expected: &str) -> bool {
+        let Some(symbol) = self.scip.symbol_at(range) else { return false };
         let suffix = match expected {
             "core::cell::Cell" => "cell/Cell#",
             "core::cell::Cell::get" => "cell/impl#[`Cell<T>`]get().",
@@ -86,6 +95,12 @@ impl Translator {
             "core::option::Option" => "option/Option#",
             "core::option::Option::Some" => "option/Option#Some#",
             "core::option::Option::None" => "option/Option#None#",
+            "core::option::branch" => "option/impl#[`Option<T>`][Try]branch().",
+            "core::result::Result" => "result/Result#",
+            "core::result::Result::Ok" => "result/Result#Ok#",
+            "core::result::Result::Err" => "result/Result#Err#",
+            "core::result::Result::unwrap" => "result/impl#[`Result<T, E>`]unwrap().",
+            "core::result::branch" => "result/impl#[`Result<T, E>`][Try]branch().",
             "core::slice::iter" => "slice/impl#[`[T]`]iter().",
             "core::slice::len" => "slice/impl#[`[T]`]len().",
             "core::str::as_bytes" => "str/impl#[str]as_bytes().",
@@ -113,7 +128,8 @@ impl Translator {
                 syn::Item::Struct(s) => {
                     let Some(symbol) = self.scip.symbol_at(&s.ident.span().into()) else { continue };
                     let symbol = symbol.to_string();
-                    self.structs.insert(symbol, Struct { impls: Default::default() });
+                    let has_fields = !s.fields.is_empty();
+                    self.structs.insert(symbol, Struct { has_fields, impls: Default::default() });
                 }
                 _ => {}
             }
@@ -144,6 +160,7 @@ impl Translator {
             }
         }
 
+        self.collect_error_types(file);
         self.collect_cell_types(file);
         self.collect_drop_infos(file);
     }

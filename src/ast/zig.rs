@@ -80,6 +80,8 @@ pub enum Node {
     EnumLiteral(String),
     /// .equal_equal
     EqualEqual(Box<Node>, Box<Node>),
+    /// .error_value
+    ErrorValue(String),
     /// .field_access
     FieldAccess(Box<Node>, String),
     /// .for_range
@@ -104,6 +106,8 @@ pub enum Node {
     MulWrap(Box<Node>, Box<Node>),
     /// .number_literal
     NumberLiteral(String),
+    /// .@"orelse"
+    Orelse(Box<Node>, Box<Node>),
     /// .@"return"
     Return(Option<Box<Node>>),
     /// .shl
@@ -123,6 +127,10 @@ pub enum Node {
 
     /// .array_type
     ArrayType(Box<Node>, Box<Node>),
+    /// .error_set_decl
+    ErrorSetDecl(Vec<String>),
+    /// .error_union
+    ErrorUnion(Box<Node>, Box<Node>),
     /// .optional_type
     OptionalType(Box<Node>),
     /// .ptr_type
@@ -142,6 +150,7 @@ pub enum Node {
         cond: Box<Node>,
         capture: Option<String>,
         then_branch: Box<Node>,
+        else_capture: Option<String>,
         else_branch: Option<Box<Node>>,
     },
     /// .while_simple

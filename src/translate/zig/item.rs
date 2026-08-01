@@ -47,6 +47,11 @@ impl Translator {
     fn translate_enum(&self, e: &syn::ItemEnum) -> Node {
         let name = e.ident.to_string();
         let symbol = self.scip.symbol_at(&e.ident.span().into()).unwrap().to_string();
+        if self.error_types.contains(&symbol) {
+            let members = e.variants.iter().map(|v| v.ident.to_string()).collect();
+            return self.translate_error_set(&name, members);
+        }
+
         let enum_ = &self.enums[&symbol];
         let has_data = enum_.has_data;
         let impls = &enum_.impls;
@@ -65,6 +70,10 @@ impl Translator {
     fn translate_struct(&self, s: &syn::ItemStruct) -> Node {
         let name = s.ident.to_string();
         let symbol = self.scip.symbol_at(&s.ident.span().into()).unwrap().to_string();
+        if self.error_types.contains(&symbol) {
+            return self.translate_error_set(&name, vec![name.clone()]);
+        }
+
         let struct_ = &self.structs[&symbol];
         let impls = &struct_.impls;
 
@@ -126,7 +135,9 @@ impl Translator {
             .chain(typed)
             .collect();
         let return_type = Box::new(self.translate_return_type(&method.sig.output));
+        self.push_error_scope(&method.sig.output);
         let body = Box::new(self.translate_block(&method.block));
+        self.pop_error_scope();
         Node::FnDecl { name, params, return_type, body }
     }
 
@@ -196,7 +207,9 @@ impl Translator {
                 preamble.push(Node::Defer(Box::new(self.drop_call(name))));
             }
         }
+        self.push_error_scope(&f.sig.output);
         let body = Box::new(self.translate_block_with_preamble(&f.block, preamble));
+        self.pop_error_scope();
         Node::FnDecl { name, params, return_type, body }
     }
 
