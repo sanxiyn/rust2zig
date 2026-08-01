@@ -28,6 +28,10 @@ pub fn eval(a: u32, b: u32, c: u32) -> Result<u32> {
     div(sum, c)
 }
 
+pub fn eval_chain(a: u32, b: u32, c: u32) -> Result<u32> {
+    div(add(a, b)?, c)
+}
+
 pub fn eval_or(a: u32, b: u32, c: u32, default: u32) -> u32 {
     match eval(a, b, c) {
         Ok(value) => value,
@@ -53,6 +57,12 @@ fn test_eval() {
     assert_eq!(3, eval(1, 2, 1).unwrap());
     assert_eq!(Err(Error::DivideByZero), eval(1, 2, 0));
     assert_eq!(Err(Error::Overflow), eval(600, 600, 1));
+}
+
+#[test]
+fn test_eval_chain() {
+    assert_eq!(3, eval_chain(1, 2, 1).unwrap());
+    assert_eq!(Err(Error::DivideByZero), eval_chain(1, 2, 0));
 }
 
 #[test]

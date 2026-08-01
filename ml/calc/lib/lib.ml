@@ -27,6 +27,11 @@ let eval a b c =
     let* sum = add a b in
     div sum c
 
+let eval_chain a b c =
+    let ( let* ) = Result.bind in
+    let* try1 = add a b in
+    div try1 c
+
 let eval_or a b c default =
     match eval a b c with
     | Ok value -> value

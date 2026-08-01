@@ -2,9 +2,10 @@
 
 Status and roadmap for translating Rust's `Result<T, E>` and the `?` operator.
 **Zig: level 1 implemented**, levels 2 and 3 are not. **OCaml: implemented**,
-except for a `?` outside statement position. The emitted output is verified
-against Zig 0.16.0 and OCaml 5.4.1. Driven by `rust/regex`, whose parse methods
-return `Result<T> = core::result::Result<T, Error>` and propagate with `?`.
+except for a `?` in a conditionally-evaluated position. The emitted output is
+verified against Zig 0.16.0 and OCaml 5.4.1. Driven by `rust/regex`, whose parse
+methods return `Result<T> = core::result::Result<T, Error>` and propagate with
+`?`.
 
 The two backends share a fixture and almost nothing else. Everything from here
 to the OCaml section is about Zig, where the whole design is forced by one
@@ -233,8 +234,11 @@ which is valid Rust, so it belongs in desugar rather than the translator, as an
 OCaml-only pass — the same shape as `compound_assignment`, which is already
 OCaml-only. The Zig backend does not want it: `try` works mid-expression.
 
-Until that pass exists, a mid-expression `?` should stay a `TODO`. Only
-`rust/regex` has one, and it is unbuildable for other reasons.
+This is now the `try_expression` pass (`doc/desugar.md`). It hoists only where
+the operand is evaluated unconditionally: a `?` in a match arm, a closure body,
+or the right operand of `&&` / `||` would change when it runs, so it is left in
+place and the translator marks it `TODO`. Nothing in the fixtures hits that,
+and the honest failure is a visible marker rather than a reordered effect.
 
 ### Prerequisites
 
@@ -258,8 +262,8 @@ Until that pass exists, a mid-expression `?` should stay a `TODO`. Only
 4. `?` in statement position as a locally defined `let*`, flavor chosen by the
    `Try` moniker. **Done.**
 5. `ml/calc`, regenerated and checked by `test_ml.sh` and `test_test.sh`. **Done.**
-6. The hoisting desugar pass for mid-expression `?`, when a buildable fixture
-   needs it. Not done — a `?` elsewhere is a `TODO`.
+6. The hoisting desugar pass for mid-expression `?`. **Done**, as
+   `try_expression`; only conditionally-evaluated positions stay a `TODO`.
 
 The emitted OCaml, for the `?` and `match` rows:
 
@@ -310,14 +314,16 @@ needs no unwrapping on the Zig side.
 
 | Path | Role |
 |------|------|
-| `rust/calc`, `zig/calc.zig` | Zig level 1: fieldless enum error, alias, `?`, `Ok`, `Err`, `unwrap`, `match`, and `?` on `Option` |
-| `rust/calc`, `ml/calc` | The same fixture for OCaml: `(int, error) result`, `Error`, `let*` over both `Result.bind` and `Option.bind`, `Result.get_ok`, and an `Ok`/`Error` match |
+| `rust/calc`, `zig/calc.zig` | Zig level 1: fieldless enum error, alias, `?` (both positions), `Ok`, `Err`, `unwrap`, `match`, and `?` on `Option` |
+| `rust/calc`, `ml/calc` | The same fixture for OCaml: `(int, error) result`, `Error`, `let*` over both `Result.bind` and `Option.bind`, a hoisted mid-expression `?`, `Result.get_ok`, and an `Ok`/`Error` match |
 | `rust/regex`, `zig/regex.zig` | Level 1: unit-struct error, `?`, `Ok` |
 
 `rust/calc` is a bounded calculator: `add` and `div` return
 `Result<u32> = core::result::Result<u32, Error>` over a fieldless
-`enum Error { Overflow, DivideByZero }`, `eval` propagates with `?`, `eval_or`
-matches on the result, and `half` / `quarter` carry the `Option` half of `?`.
+`enum Error { Overflow, DivideByZero }`, `eval` propagates with `?` in statement
+position, `eval_chain` does the same mid-expression (`div(add(a, b)?, c)`, which
+`try_expression` hoists for OCaml and Zig takes as-is), `eval_or` matches on the
+result, and `half` / `quarter` carry the `Option` half of `?`.
 It exists because `rust/regex` cannot be translated yet — the unit-struct error
 row above is still unexercised.
 
@@ -336,8 +342,11 @@ report `SKIP regex`.
 
 ## Not implemented yet
 
-1. Step 6 above: the hoisting desugar pass, so a `?` outside statement position
-   translates for OCaml.
+1. A `?` in a conditionally-evaluated position for OCaml — a match arm, a
+   closure body, the right operand of `&&` / `||`. `try_expression` cannot
+   hoist those without changing when they run, and `let*` cannot express them
+   in place; it would take a rewrite into an explicit `Result.bind` call, or a
+   `match` on the operand.
 2. Level 2 as the fallback when the payload-free gate fails. A `Result` whose
    `E` carries a payload currently emits a `TODO` type. OCaml needs no
    equivalent.

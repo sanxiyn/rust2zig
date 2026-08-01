@@ -23,6 +23,10 @@ fn eval(a: u32, b: u32, c: u32) Error!u32 {
     return div(sum, c);
 }
 
+fn evalChain(a: u32, b: u32, c: u32) Error!u32 {
+    return div(try add(a, b), c);
+}
+
 fn evalOr(a: u32, b: u32, c: u32, default: u32) u32 {
     return if (eval(a, b, c)) |value| value else |_| default;
 }
@@ -44,6 +48,11 @@ test "eval" {
     try std.testing.expectEqual(3, try eval(1, 2, 1));
     try std.testing.expectEqual(error.DivideByZero, eval(1, 2, 0));
     try std.testing.expectEqual(error.Overflow, eval(600, 600, 1));
+}
+
+test "eval_chain" {
+    try std.testing.expectEqual(3, try evalChain(1, 2, 1));
+    try std.testing.expectEqual(error.DivideByZero, evalChain(1, 2, 0));
 }
 
 test "eval_or" {
