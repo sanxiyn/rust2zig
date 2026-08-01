@@ -10,8 +10,8 @@ Driven by `rust/calc` and `rust/regex`, both of which declare
 The Zig backend first resolved aliases in the translator (`resolve_alias` in
 `src/translate/zig/result.rs`, applied at the top of `translate_type`), because
 `Result<T>` had to become `Result<T, Error>` before the level 1 mapping in
-`RESULT.md` could see an error type at all. That placement is wrong on the test
-`doc/desugar.md` sets: expanding an alias yields *valid Rust*, so it is
+`design/result.md` could see an error type at all. That placement is wrong on
+the test `doc/desugar.md` sets: expanding an alias yields *valid Rust*, so it is
 backend-neutral and belongs in desugar, where every backend gets it.
 
 The OCaml backend is the evidence. It has no alias resolution, so `Result<u32>`
@@ -136,7 +136,7 @@ let exception Return of (int, error) result in
 
 so the fixture that shows the pass doing anything new is an OCaml one. `ml/calc`
 now exists and asserts exactly that, the alias having been the first of the
-gaps the OCaml `Result` mapping needed closed (`RESULT.md`).
+gaps the OCaml `Result` mapping needed closed (`design/result.md`).
 
 ## Not implemented yet
 

@@ -162,9 +162,9 @@ Examples currently passing both suites: gcd, direction (plain enum), div,
 option (generic enum), sum (for loop), geometry, geometry2 (`&mut self`
 receiver), closure, iter, inc (`&mut T` and `&T` parameters), dot
 (`std::iter::zip`), bitset (bit manipulation on a struct), drop and drop2
-(`Drop` elaboration, see `DROP.md`), hash (FNV-1a, extracted from
+(`Drop` elaboration, see `design/drop.md`), hash (FNV-1a, extracted from
 `const-fnv1a-hash`), random (PCG-XSH-RR, extracted from `oorandom`), calc
-(`Result` and `?`, see `RESULT.md`). The
+(`Result` and `?`, see `design/result.md`). The
 `option` example also exercises a generic method (`Option::and`) and `&self`
 receiver.
 

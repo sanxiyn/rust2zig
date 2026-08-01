@@ -113,8 +113,8 @@ Axes a real crate will eventually force, with no fixture yet:
   emission work since resolution is already SCIP-symbol-driven.
 * **Macro / derive expansion** — the deep tension: syn is pre-expansion,
   SCIP is post-expansion. Every fixture here edits macros away to dodge it.
-* **`Result` + `?`** (`syn::Expr::Try`) — now designed in `RESULT.md`, and
-  constrained by Zig errors carrying no payload; type aliases (`Item::Type`)
+* **`Result` + `?`** (`syn::Expr::Try`) — now designed in `design/result.md`,
+  and constrained by Zig errors carrying no payload; type aliases (`Item::Type`)
   are a prerequisite for it. Also or-patterns / guards, const generics,
   top-level `const` (`Item::Const`).
 * **Dependencies, features / `cfg`, std translation** (`rust.*` mirroring

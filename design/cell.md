@@ -45,9 +45,9 @@ the first indirection.
 The same set decides receivers: `&self` maps to `self: *Self` instead of
 `self: *const Self` exactly when `Self` is Cell-bearing.
 
-`RESULT.md`'s level 3 (out-of-band diagnostics) needs the same promotion for the
-same reason: a `&self` method that records a diagnostic on the receiver is
-mutating through a shared reference, exactly as a `Cell` write does.
+`design/result.md`'s level 3 (out-of-band diagnostics) needs the same promotion
+for the same reason: a `&self` method that records a diagnostic on the receiver
+is mutating through a shared reference, exactly as a `Cell` write does.
 
 ### Applied to `rust/regex`
 

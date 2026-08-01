@@ -120,7 +120,7 @@ the ordering matters more than the enumeration.
 3. **`Result<T, E>` and `?` -> Zig error unions and `try`.** `Result<Ast>`
    renders as `Result(Ast)`; the `type Result<T> = ...` alias is
    `// TODO: type alias`; `Ok(x)` renders as an undefined `Ok(x)`;
-   `syn::Expr::Try` is unhandled outright. Designed in `RESULT.md`, not
+   `syn::Expr::Try` is unhandled outright. Designed in `design/result.md`, not
    implemented. The mapping is clean *only because this fixture's `Error` is a
    unit struct*: **Zig errors carry no payload**, so `E!T` is available just
    when `E` is payload-free. Real `regex-syntax` carries
@@ -133,17 +133,17 @@ the ordering matters more than the enumeration.
    has no interior mutability, so the `Cell` is erased and the mutability it
    granted is re-expressed in the pointer types: a shared reference to a
    Cell-bearing type becomes `*T` rather than `*const T`. Designed and recorded
-   in `CELL.md`. Changing `ParserI` to hold `&'s mut Parser` (gap 5) put this
-   fixture in the cheap case — the `Cell` is reached through a pointer, so the
-   accessor return promotes and the receiver stays const, with no receiver
+   in `design/cell.md`. Changing `ParserI` to hold `&'s mut Parser` (gap 5) put
+   this fixture in the cheap case — the `Cell` is reached through a pointer, so
+   the accessor return promotes and the receiver stays const, with no receiver
    promotion and no dataflow pass.
 5. **Generic structs with a trait bound — removed from the fixture.**
    `ParserI` was originally `ParserI<'s, P: Borrow<Parser>>`, which got no
    `comptime P: type` on the type and emitted a bare undefined `P` for its
    field. It now holds `&'s mut Parser` outright, which both removes the gap and
-   turns `Cell` into its cheap case (see gap 4 and `CELL.md`). The cost is that
-   this fixture no longer exercises generic *structs* at all — existing generic
-   support covers functions, methods, and enums, and that hole now needs a
+   turns `Cell` into its cheap case (see gap 4 and `design/cell.md`). The cost
+   is that this fixture no longer exercises generic *structs* at all — existing
+   generic support covers functions, methods, and enums, and that hole now needs a
    fixture of its own. The trait-bound half of the question stays with
    [hasher.md](hasher.md).
 6. **`char` and `&str` internals.** `char` renders as the undefined `char`
@@ -195,8 +195,8 @@ the ordering matters more than the enumeration.
     shadowing renamer handles *locals*; this is the same problem one level up, at
     container scope, and it needs a disambiguation convention. Inlining the
     trivial accessors away would remove these particular instances, but it was
-    rejected for `Cell` (see `CELL.md`) and is no better here: it deletes methods
-    the source declares and does not generalize past one-line bodies.
+    rejected for `Cell` (see `design/cell.md`) and is no better here: it deletes
+    methods the source declares and does not generalize past one-line bodies.
 15. **Unit structs.** `struct ParserBuilder;` becomes `const ParserBuilder =
     struct {};`, which is right, but the *expression* `ParserBuilder` becomes a
     bare type reference instead of `ParserBuilder{}`.
@@ -278,9 +278,9 @@ signature.
 
 Gaps 4 and 8 are done. The rest, in order of value per unit of work:
 
-1. **Gap 3** (`Result` + `?`) — designed in `RESULT.md`; needs `Item::Type`
-   first, and closes `Expr::Try`, a long-standing README "not yet targeted"
-   entry. Level 1 covers this fixture's payload-free `Error` and no more.
+1. **Gap 3** (`Result` + `?`) — designed in `design/result.md`; needs
+   `Item::Type` first, and closes `Expr::Try`, a long-standing README "not yet
+   targeted" entry. Level 1 covers this fixture's payload-free `Error` and no more.
 2. **Level 1** — `Box` as `*T`, deciding the allocator story on the smallest
    possible surface, plus the variant/method collision convention.
 3. **Gap 14** (field/method collisions) — promoted from hygiene to blocking:
