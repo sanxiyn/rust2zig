@@ -141,7 +141,13 @@ rust-analyzer SCIP dumps provide semantic information.
   bindings.
 * `check_moniker(path, expected)`: maps logical Rust paths
   (`core::option::Option::Some`, `std::macros::println`, ...) to SCIP
-  descriptor suffixes and suffix-matches against the occurrence's symbol
+  descriptor suffixes and suffix-matches against the occurrence's symbol.
+  The table itself is `src/translate/moniker.rs`, shared by the backends:
+  the suffixes are rust-analyzer's spellings rather than anything derivable,
+  and both backends key off the same ones — a `?` lowers to Zig `try` and to
+  an OCaml `let*` from the very same `Try` impl. Each backend keeps only the
+  thin `check_moniker` / `check_moniker_ident` / `check_moniker_at` methods,
+  which need its own `Scip`.
 * `path_mode(path)`: returns `EnumVariant` iff the path's last segment
   resolves to a symbol of kind `EnumMember`
 

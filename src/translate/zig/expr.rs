@@ -1,5 +1,6 @@
 use crate::ast::zig::{BLOCK_LABEL, Capture, Node, SwitchArm, SwitchBody, Var};
 use crate::translate::name::camel_to_snake;
+use crate::translate::ty::{expr_type, peel_ref};
 use super::{PathMode, Translator};
 use super::call::Wrapping;
 use super::pat::Accessor;
@@ -164,52 +165,11 @@ impl Translator {
     }
 
     fn is_narrowing(&self, expr: &syn::Expr, ty: &syn::Type) -> bool {
-        let Some(source) = self.expr_type(expr) else { return false };
+        let Some(source) = expr_type(&self.scip, expr) else { return false };
         let (Some(source), Some(target)) = (int_bits(&source), int_bits(ty)) else {
             return false;
         };
         target < source
-    }
-
-    pub fn expr_type(&self, expr: &syn::Expr) -> Option<syn::Type> {
-        match expr {
-            syn::Expr::Binary(eb) => self.binary_expr_type(eb),
-            syn::Expr::Call(ec) => {
-                let syn::Expr::Path(ep) = &*ec.func else { return None };
-                let ident = &ep.path.segments.last()?.ident;
-                self.scip.return_type_at(&ident.span().into())
-            }
-            syn::Expr::Cast(ec) => Some((*ec.ty).clone()),
-            syn::Expr::Index(ei) => match peel_ref(&self.expr_type(&ei.expr)?) {
-                syn::Type::Array(ta) => Some((*ta.elem).clone()),
-                syn::Type::Slice(ts) => Some((*ts.elem).clone()),
-                _ => None,
-            },
-            syn::Expr::MethodCall(emc) => self.scip.return_type_at(&emc.method.span().into()),
-            syn::Expr::Paren(ep) => self.expr_type(&ep.expr),
-            syn::Expr::Path(ep) => {
-                let ident = &ep.path.segments.last()?.ident;
-                self.scip.type_at(&ident.span().into())
-            }
-            _ => None,
-        }
-    }
-
-    fn binary_expr_type(&self, eb: &syn::ExprBinary) -> Option<syn::Type> {
-        match eb.op {
-            syn::BinOp::Shl(_) | syn::BinOp::Shr(_) => self.expr_type(&eb.left),
-            syn::BinOp::Add(_)
-            | syn::BinOp::BitAnd(_)
-            | syn::BinOp::BitOr(_)
-            | syn::BinOp::BitXor(_)
-            | syn::BinOp::Div(_)
-            | syn::BinOp::Mul(_)
-            | syn::BinOp::Rem(_)
-            | syn::BinOp::Sub(_) => {
-                self.expr_type(&eb.left).or_else(|| self.expr_type(&eb.right))
-            }
-            _ => None,
-        }
     }
 
     fn rem_is_signed(&self, eb: &syn::ExprBinary) -> bool {
@@ -487,13 +447,6 @@ fn int_literal(li: &syn::LitInt) -> String {
     match text.strip_suffix(li.suffix()) {
         Some(text) => text.to_string(),
         None => text,
-    }
-}
-
-pub fn peel_ref(ty: &syn::Type) -> &syn::Type {
-    match ty {
-        syn::Type::Reference(tr) => &tr.elem,
-        _ => ty,
     }
 }
 

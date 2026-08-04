@@ -1,24 +1,26 @@
-type error =
-    | Overflow
-    | DivideByZero
+module Error = struct
+    type t =
+        | Overflow
+        | DivideByZero
+end
 
 let limit =
     1000
 
 let add a b =
-    let exception Return of (int, error) result in
+    let exception Return of (int, Error.t) result in
     (try
         let sum = a + b in
         if sum > limit then
-            raise (Return (Error Overflow));
+            raise (Return (Error Error.Overflow));
         Ok sum
     with Return r -> r)
 
 let div a b =
-    let exception Return of (int, error) result in
+    let exception Return of (int, Error.t) result in
     (try
         if b = 0 then
-            raise (Return (Error DivideByZero));
+            raise (Return (Error Error.DivideByZero));
         Ok (a / b)
     with Return r -> r)
 

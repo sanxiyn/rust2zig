@@ -1,12 +1,14 @@
-type direction =
-    | North
-    | East
-    | South
-    | West
+module Direction = struct
+    type t =
+        | North
+        | East
+        | South
+        | West
+end
 
 let opposite d =
     match d with
-    | North -> South
-    | East -> West
-    | South -> North
-    | West -> East
+    | Direction.North -> Direction.South
+    | Direction.East -> Direction.West
+    | Direction.South -> Direction.North
+    | Direction.West -> Direction.East

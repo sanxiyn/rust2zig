@@ -1,5 +1,10 @@
-use crate::ast::ml::Expression;
+use crate::ast::ml::{Constant, Expression};
 use super::{apply_op, Translator};
+
+fn failwith(message: &str) -> Expression {
+    let message = Expression::Constant(Constant::String(message.to_string()));
+    apply_op("failwith", vec![message])
+}
 
 impl Translator {
     pub fn translate_macro(&self, mac: &syn::Macro) -> Option<Expression> {
@@ -7,6 +12,8 @@ impl Translator {
             Some(self.translate_assert(mac))
         } else if self.check_moniker(&mac.path, "core::macros::assert_eq") {
             Some(self.translate_assert_eq(mac))
+        } else if self.check_moniker(&mac.path, "std::macros::panic") {
+            self.translate_panic(mac)
         } else {
             None
         }
@@ -22,6 +29,14 @@ impl Translator {
         let args = self.translate_macro_args(mac);
         let equal = apply_op("=", args);
         Expression::Assert(Box::new(equal))
+    }
+
+    fn translate_panic(&self, mac: &syn::Macro) -> Option<Expression> {
+        if mac.tokens.is_empty() {
+            return Some(failwith("panic"));
+        }
+        let message: syn::LitStr = syn::parse2(mac.tokens.clone()).ok()?;
+        Some(failwith(&message.value()))
     }
 
     fn translate_macro_args(&self, mac: &syn::Macro) -> Vec<Expression> {

@@ -17,6 +17,7 @@ mod ty;
 
 use crate::ast::zig::{Node, Var};
 use crate::scip::{Kind, Range, Scip};
+use crate::translate::moniker;
 use crate::translate::name::{camel_to_snake, screaming_to_camel, snake_to_camel};
 use drop::DropInfo;
 use generic::GenericFn;
@@ -78,38 +79,7 @@ impl Translator {
 
     pub fn check_moniker_at(&self, range: &Range, expected: &str) -> bool {
         let Some(symbol) = self.scip.symbol_at(range) else { return false };
-        let suffix = match expected {
-            "core::cell::Cell" => "cell/Cell#",
-            "core::cell::Cell::get" => "cell/impl#[`Cell<T>`]get().",
-            "core::cell::Cell::new" => "cell/impl#[`Cell<T>`]new().",
-            "core::cell::Cell::set" => "cell/impl#[`Cell<T>`]set().",
-            "core::iter::Iterator::enumerate" => "iter/traits/iterator/Iterator#enumerate().",
-            "core::macros::assert_eq" => "macros/assert_eq!",
-            "core::mem::drop" => "mem/drop().",
-            "core::num::rotate_right" => "]rotate_right().",
-            "core::num::wrapping_add" => "]wrapping_add().",
-            "core::num::wrapping_shl" => "]wrapping_shl().",
-            "core::num::wrapping_mul" => "]wrapping_mul().",
-            "core::num::wrapping_sub" => "]wrapping_sub().",
-            "core::ops::drop::Drop" => "ops/drop/Drop#",
-            "core::option::Option" => "option/Option#",
-            "core::option::Option::Some" => "option/Option#Some#",
-            "core::option::Option::None" => "option/Option#None#",
-            "core::option::branch" => "option/impl#[`Option<T>`][Try]branch().",
-            "core::result::Result" => "result/Result#",
-            "core::result::Result::Ok" => "result/Result#Ok#",
-            "core::result::Result::Err" => "result/Result#Err#",
-            "core::result::Result::unwrap" => "result/impl#[`Result<T, E>`]unwrap().",
-            "core::result::branch" => "result/impl#[`Result<T, E>`][Try]branch().",
-            "core::slice::iter" => "slice/impl#[`[T]`]iter().",
-            "core::slice::len" => "slice/impl#[`[T]`]len().",
-            "core::str::as_bytes" => "str/impl#[str]as_bytes().",
-            "std::iter::zip" => "iter/adapters/zip/zip().",
-            "std::macros::assert" => "macros/builtin/assert!",
-            "std::macros::panic" => "macros/panic!",
-            "std::macros::println" => "macros/println!",
-            _ => return false,
-        };
+        let Some(suffix) = moniker::suffix(expected) else { return false };
         symbol.ends_with(suffix)
     }
 

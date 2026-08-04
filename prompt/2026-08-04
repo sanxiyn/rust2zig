@@ -1,0 +1,16 @@
+Explore the project and give me a summary.
+Today I want to think about namespacing, for OCaml backend. The idea is that, idiomatically, BitSet in bitset should be BitSet.t, not bit_set, and methods also in the module.
+Decisions: wrap enums. Will worry about shadowing later. Ditto ordering. For now, use interior mutability for the current module. (This is already the case for the current error type in Zig's translation of try expression.) Before proceeding, let's write out the design to doc/ml.md: analysis, translation scheme, and note shadowing/ordering in Bugs section.
+I want to review some implementation decisions. You proposed adding StructureItem::Module(String, Structure), but that's not Pstr_module. By following Parsetree closely, we could be sure we can handle any possible future needs. At minimum there probably should be ModuleExpr::Structure(Structure), and place for ModuleExpr::Functor?
+Looks good. Let's implement.
+Please use Edit tool so that I can review.
+How do you think things are going so far?
+What do you suggest to do with shadowing? Just for option example, I don't think anything needs to be done, since that example in fact does not use standard library Option.
+src/translate/zig/expr.rs has expr_type. Maybe move that to src/translate/ty.rs and use it?
+Let's implement escape_ml. Suffixing with underscore is fine.
+Sort alphabetically. asr comes before assert.
+Let's implement panic, mapping to failwith as you suggested.
+Let's merge moniker table and put it to src/translate/moniker.rs.
+How do you think things are going so far?
+Read test_test.sh again. It already runs dune runtest.
+/exit

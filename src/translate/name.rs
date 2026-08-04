@@ -13,6 +13,24 @@ pub fn camel_to_snake(s: &str) -> String {
     result
 }
 
+pub fn escape_ml(name: &str) -> String {
+    const ML_KEYWORDS: &[&str] = &[
+        "and", "as", "asr", "assert", "begin", "class", "constraint", "do",
+        "done", "downto", "else", "end", "exception", "external", "false",
+        "for", "fun", "function", "functor", "if", "in", "include", "inherit",
+        "initializer", "land", "lazy", "let", "lor", "lsl", "lsr", "lxor",
+        "match", "method", "mod", "module", "mutable", "new", "nonrec",
+        "object", "of", "open", "or", "private", "rec", "sig", "struct",
+        "then", "to", "true", "try", "type", "val", "virtual", "when",
+        "while", "with",
+    ];
+    if ML_KEYWORDS.contains(&name) {
+        format!("{}_", name)
+    } else {
+        name.to_string()
+    }
+}
+
 pub fn escape_zig(name: &str) -> String {
     const ZIG_KEYWORDS: &[&str] = &[
         "addrspace", "align", "allowzero", "and", "anyframe", "anytype",
@@ -32,6 +50,10 @@ pub fn escape_zig(name: &str) -> String {
 
 pub fn screaming_to_camel(s: &str) -> String {
     snake_to_camel(&s.to_ascii_lowercase())
+}
+
+pub fn screaming_to_snake(s: &str) -> String {
+    s.to_ascii_lowercase()
 }
 
 pub fn snake_to_camel(s: &str) -> String {

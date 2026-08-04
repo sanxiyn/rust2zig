@@ -1,16 +1,20 @@
-type point = {
-    mutable x : int;
-    mutable y : int;
-}
+module Point = struct
+    type t = {
+        mutable x : int;
+        mutable y : int;
+    }
 
-let translate self dx dy =
-    self.x <- self.x + dx;
-    self.y <- self.y + dy
+    let translate self dx dy =
+        self.x <- self.x + dx;
+        self.y <- self.y + dy
+end
 
-type shape =
-    | Dot of point
-    | Line of point * point
-    | Circle of { center : point; radius : int }
+module Shape = struct
+    type t =
+        | Dot of Point.t
+        | Line of Point.t * Point.t
+        | Circle of { center : Point.t; radius : int }
+end
 
 let min a b =
     if a < b then
@@ -26,6 +30,6 @@ let max a b =
 
 let bounding_box s =
     match s with
-    | Dot p -> (p.x, p.y, p.x, p.y)
-    | Line (p, q) -> (min p.x q.x, min p.y q.y, max p.x q.x, max p.y q.y)
-    | Circle { center; radius } -> (center.x - radius, center.y - radius, center.x + radius, center.y + radius)
+    | Shape.Dot p -> (p.x, p.y, p.x, p.y)
+    | Shape.Line (p, q) -> (min p.x q.x, min p.y q.y, max p.x q.x, max p.y q.y)
+    | Shape.Circle { center; radius } -> (center.x - radius, center.y - radius, center.x + radius, center.y + radius)

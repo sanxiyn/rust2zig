@@ -1,5 +1,6 @@
 use crate::ast::zig::Node;
 use crate::translate::name::{camel_to_snake, escape_zig, snake_to_camel};
+use crate::translate::ty::expr_type;
 use super::{PathMode, Translator, dotted_name};
 
 #[derive(Clone, Copy)]
@@ -157,7 +158,8 @@ impl Translator {
         if !self.check_moniker_ident(&emc.method, "core::num::rotate_right") {
             return None;
         }
-        let ty = self.translate_type(&self.expr_type(&emc.receiver)?);
+        let receiver_ty = expr_type(&self.scip, &emc.receiver)?;
+        let ty = self.translate_type(&receiver_ty);
         let value = self.translate_expr(&emc.receiver);
         let amount = self.translate_expr(&emc.args[0]);
         Some(Node::Call(

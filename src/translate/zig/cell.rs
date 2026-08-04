@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
+use crate::translate::ty::peel_ref;
 use super::Translator;
-use super::expr::peel_ref;
 
 impl Translator {
     pub fn collect_cell_types(&mut self, file: &syn::File) {

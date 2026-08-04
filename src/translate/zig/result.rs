@@ -1,6 +1,7 @@
 use syn::visit::Visit;
 
 use crate::ast::zig::{Node, Var};
+use crate::translate::ty::expr_type;
 use super::Translator;
 
 pub enum ResultPat {
@@ -87,7 +88,7 @@ impl Translator {
 
     fn propagates_error(&self, expr: &syn::Expr) -> bool {
         let Some(scope) = self.error_scope.borrow().clone() else { return false };
-        let Some(ty) = self.expr_type(expr) else { return true };
+        let Some(ty) = expr_type(&self.scip, expr) else { return true };
         let Some((_, error)) = self.result_types(&ty) else { return true };
         self.type_symbol(&error).is_some_and(|symbol| symbol == scope)
     }

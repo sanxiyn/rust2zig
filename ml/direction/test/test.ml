@@ -1,7 +1,7 @@
 open Lib
 
 let () =
-    assert (South = opposite North);
-    assert (West = opposite East);
-    assert (North = opposite South);
-    assert (East = opposite West)
+    assert (Direction.South = opposite Direction.North);
+    assert (Direction.West = opposite Direction.East);
+    assert (Direction.North = opposite Direction.South);
+    assert (Direction.East = opposite Direction.West)
