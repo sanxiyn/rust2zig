@@ -6,8 +6,9 @@ const Point = struct {
     x: i32,
     y: i32,
 
-    fn translate(self: Self, dx: i32, dy: i32) Point {
-        return Point{ .x = self.x + dx, .y = self.y + dy };
+    fn translate(self: *Self, dx: i32, dy: i32) void {
+        self.x += dx;
+        self.y += dy;
     }
 };
 
@@ -33,32 +34,32 @@ fn max(a: i32, b: i32) i32 {
     }
 }
 
-fn boundingBox(s: Shape) struct { i32, i32, i32, i32 } {
-    return switch (s) {
-        .dot => |p| .{ p.x, p.y, p.x, p.y },
-        .line => |_line| blk: {
-            const p = _line[0];
-            const q = _line[1];
+fn boundingBox(s: *const Shape) struct { i32, i32, i32, i32 } {
+    return switch (s.*) {
+        .dot => |*p| .{ p.x, p.y, p.x, p.y },
+        .line => |*_line| blk: {
+            const p = &_line[0];
+            const q = &_line[1];
             break :blk .{ min(p.x, q.x), min(p.y, q.y), max(p.x, q.x), max(p.y, q.y) };
         },
-        .circle => |_circle| blk: {
-            const center = _circle.center;
-            const radius = _circle.radius;
-            break :blk .{ center.x - radius, center.y - radius, center.x + radius, center.y + radius };
+        .circle => |*_circle| blk: {
+            const center = &_circle.center;
+            const radius = &_circle.radius;
+            break :blk .{ center.x - radius.*, center.y - radius.*, center.x + radius.*, center.y + radius.* };
         },
     };
 }
 
 test "translate" {
-    const p: Point = Point{ .x = 1, .y = 2 };
-    const q: Point = p.translate(3, 4);
-    try std.testing.expectEqual(4, q.x);
-    try std.testing.expectEqual(6, q.y);
+    var p: Point = Point{ .x = 1, .y = 2 };
+    p.translate(3, 4);
+    try std.testing.expectEqual(4, p.x);
+    try std.testing.expectEqual(6, p.y);
 }
 
 test "bounding_box_dot" {
     const p: Point = Point{ .x = 1, .y = 2 };
-    const x0: i32, const y0: i32, const x1: i32, const y1: i32 = boundingBox(.{ .dot = p });
+    const x0: i32, const y0: i32, const x1: i32, const y1: i32 = boundingBox(&.{ .dot = p });
     try std.testing.expectEqual(1, x0);
     try std.testing.expectEqual(2, y0);
     try std.testing.expectEqual(1, x1);
@@ -68,7 +69,7 @@ test "bounding_box_dot" {
 test "bounding_box_line" {
     const p: Point = Point{ .x = 1, .y = 2 };
     const q: Point = Point{ .x = 2, .y = 1 };
-    const x0: i32, const y0: i32, const x1: i32, const y1: i32 = boundingBox(.{ .line = .{ p, q } });
+    const x0: i32, const y0: i32, const x1: i32, const y1: i32 = boundingBox(&.{ .line = .{ p, q } });
     try std.testing.expectEqual(1, x0);
     try std.testing.expectEqual(1, y0);
     try std.testing.expectEqual(2, x1);
@@ -77,7 +78,7 @@ test "bounding_box_line" {
 
 test "bounding_box_circle" {
     const p: Point = Point{ .x = 2, .y = 2 };
-    const x0: i32, const y0: i32, const x1: i32, const y1: i32 = boundingBox(.{ .circle = .{ .center = p, .radius = 1 } });
+    const x0: i32, const y0: i32, const x1: i32, const y1: i32 = boundingBox(&.{ .circle = .{ .center = p, .radius = 1 } });
     try std.testing.expectEqual(1, x0);
     try std.testing.expectEqual(1, y0);
     try std.testing.expectEqual(3, x1);

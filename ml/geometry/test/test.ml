@@ -2,9 +2,9 @@ open Lib
 
 let () =
     let p = { Point.x = 1; y = 2 } in
-    let q = Point.translate p 3 4 in
-    assert (4 = q.x);
-    assert (6 = q.y)
+    Point.translate p 3 4;
+    assert (4 = p.x);
+    assert (6 = p.y)
 
 let () =
     let p = { Point.x = 1; y = 2 } in

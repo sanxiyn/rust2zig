@@ -164,20 +164,15 @@ to test the translator are in fact equivalent.
 Both suites accept optional name arguments (e.g. `./test.sh gcd sum`) to
 run a subset; with no arguments, all examples run.
 
-Examples currently passing both suites: gcd, direction (plain enum), div,
-option (generic enum), sum (for loop), geometry, geometry2 (`&mut self`
-receiver), closure, iter, inc (`&mut T` and `&T` parameters), dot
+Examples currently passing both suites: gcd, div,
+option (generic enum), sum (for loop), geometry (`&mut self`
+receiver), closure, iter, dot
 (`std::iter::zip`), bitset (bit manipulation on a struct), drop and drop2
 (`Drop` elaboration, see `design/drop.md`), hash (FNV-1a, extracted from
 `const-fnv1a-hash`), random (PCG-XSH-RR, extracted from `oorandom`), calc
 (`Result` and `?`, see `design/result.md`). The
 `option` example also exercises a generic method (`Option::and`) and `&self`
 receiver.
-
-`divmod`, `min`, `ratio`, and `result` were retired once `redundancy.sh`
-showed they covered no region the rest of the suite did not; tuples, generic
-functions, and generic data-carrying enums are still exercised by `geometry`,
-`iter`, and `option` respectively.
 
 ## Notes
 

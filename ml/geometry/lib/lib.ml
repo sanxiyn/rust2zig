@@ -1,11 +1,12 @@
 module Point = struct
     type t = {
-        x : int;
-        y : int;
+        mutable x : int;
+        mutable y : int;
     }
 
     let translate self dx dy =
-        { x = self.x + dx; y = self.y + dy }
+        self.x <- self.x + dx;
+        self.y <- self.y + dy
 end
 
 module Shape = struct
