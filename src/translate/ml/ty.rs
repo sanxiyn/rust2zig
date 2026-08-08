@@ -1,10 +1,15 @@
 use crate::ast::ml::{CoreType, Longident};
 use crate::scip::Kind;
 use crate::translate::name::{camel_to_snake, escape_ml};
+use super::integer::is_integer_type;
+use super::string::is_string_type;
 use super::Translator;
 
 impl Translator {
     pub fn translate_type(&self, ty: &syn::Type) -> CoreType {
+        if is_string_type(ty) {
+            return CoreType::Constr(Longident::Lident("string".to_string()), vec![]);
+        }
         match ty {
             syn::Type::Path(tp) => {
                 let segment = tp.path.segments.last().unwrap();
@@ -15,7 +20,7 @@ impl Translator {
                 }
                 let name = match self.type_module(ident) {
                     Some(module) => self.qualify(Some(module), "t".to_string()),
-                    None => Longident::Lident(map_type_name(&name)),
+                    None => Longident::Lident(self.map_type_name(&name)),
                 };
                 let mut type_args = vec![];
                 if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
@@ -31,13 +36,14 @@ impl Translator {
             _ => CoreType::Constr(Longident::Lident("_".to_string()), vec![]),
         }
     }
-}
 
-fn map_type_name(name: &str) -> String {
-    match name {
-        "bool" => "bool".to_string(),
-        "i8" | "i16" | "i32" | "i64" | "i128" | "isize"
-        | "u8" | "u16" | "u32" | "u64" | "u128" | "usize" => "int".to_string(),
-        _ => escape_ml(&camel_to_snake(name)),
+    fn map_type_name(&self, name: &str) -> String {
+        if is_integer_type(name) {
+            return self.name_repr(name).ocaml_type().to_string();
+        }
+        match name {
+            "bool" => "bool".to_string(),
+            _ => escape_ml(&camel_to_snake(name)),
+        }
     }
 }

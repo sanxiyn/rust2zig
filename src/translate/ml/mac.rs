@@ -1,9 +1,9 @@
 use crate::ast::ml::{Constant, Expression};
-use super::{apply_op, Translator};
+use super::{apply, Translator};
 
 fn failwith(message: &str) -> Expression {
     let message = Expression::Constant(Constant::String(message.to_string()));
-    apply_op("failwith", vec![message])
+    apply("failwith", vec![message])
 }
 
 impl Translator {
@@ -27,7 +27,7 @@ impl Translator {
 
     fn translate_assert_eq(&self, mac: &syn::Macro) -> Expression {
         let args = self.translate_macro_args(mac);
-        let equal = apply_op("=", args);
+        let equal = apply("=", args);
         Expression::Assert(Box::new(equal))
     }
 
