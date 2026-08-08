@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+petgraph = "0.8"
 proc-macro2 = { version = "1", features = ["span-locations"] }
 prost = "0.14"
 quote = "1"
