@@ -1,0 +1,32 @@
+Explore the project and give me a summary.
+Today I want to think about integers for OCaml backend. As doc/ml.md notes in Bugs section, currently all integer types are translated to int. This has worked fine so far, but won't work for hash, since it needs multiplication modulo 2^32. We'd want value, type, operation to be 0l, int32, Int32.mul, while I think I'd leave most integers just int, to be idiomatic.
+Yes, put it on design/integer.md.
+Let's implement.
+/compact
+Let's think about string. How is it implemented in Zig, and how should we implement it in OCaml?
+Yes, put it on design/string.md.
+Let's implement.
+Yes, let's fix the printer.
+How do you think things are going so far?
+What is blocking random? Explain in more details.
+It is true we don't handle Self in return_type_at, unlike in binary_type_at, but are you sure this is blocking random? Looking at random, it seems to me expr_type fails for wrapping_mul because it is foreign.
+Let's fix expr_type for Expr::Field.
+I think extending type_at is fine.
+Let's think about how to fix the ordering. Topological sort, right?
+Let's put it on design/recursion.md.
+Before implementation, do we buy or build Tarjan's algorithm?
+Well, we'd need more graph algorithms, I am inclined to add petgraph. Reverse topological order of strongly connected components is documented guarantee. As you said, within component order is unspecified, and that's important. We'd keep source order ID to node ID mapping and re-sort using it.
+Update the doc.
+Let's implement.
+What are you doing?
+Panic is fine for now.
+Let's add fib/is_even/is_odd as rust/recursion.
+I reviewed ml/recursion. Idiomatically, there should be a newline between is_even and is_odd.
+How do you think things are going so far?
+I do all commits myself, sorry about that. I ran coverage and redundancy, result under coverage directory is now fresh. Have a look at the result of python redundancy.py coverage/pertest.
+What is missing for random for OCaml? It was long time ago, so please refresh my memory. Better, update research/random.md.
+Let's implement associated const.
+Don't forget to sort match arms alphabetically.
+Let's get wrapping_* return type from symbol like we do for binary_type_at. Foreign symbols we need to deal with eventually, but not right now.
+Let's implement wrapping_shl.
+/compact

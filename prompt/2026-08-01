@@ -1,0 +1,16 @@
+Explore the project and give me a summary.
+Let's do result today, following the plan.
+What are you doing?
+Keep enum variants sorted.
+Variant names should correspond, ie ErrorUnion, not ErrorUnionType.
+What should we do for OCaml backend?
+How would type alias desugaring work?
+Before implementation, let's write this up to TYPE.md, alias in value position and type-param defaults etc seem worth writing down.
+Implement type alias desugaring.
+Update RESULT.md with OCaml implementation plan: using standard library result type, and using binding operator.
+Let's implement result for OCaml and pass calc test.
+Use this to read SCIP: protoc -I proto --decode scip.Index scip.proto < rust/calc/index.scip.
+I moved design documents under design. Fix cross references.
+Let's implement try expression hoisting desugaring pass as desugar/try_expression.rs.
+How do you think things are going so far?
+/exit
