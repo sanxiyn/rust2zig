@@ -1,0 +1,16 @@
+Explore the project and give me a summary.
+Missing files and uncommitted changes (such as wiring OCaml backend) are in the different machine, don't worry about it. Today I want to work on Common Lisp backend. Design is fairly complete and it should be ready for implementation, but do re-read design and examples.
+My understanding of the rule is that isize/usize are fixnum and others are not. Maybe test-sum should be updated to have of-type (signed-byte 32)?
+Do we want to create Common Lisp AST, or use an external one like lexpr?
+Matching head symbols in the printer seems entirely unproblematic. lexpr also supports keywords and vectors, exactly in the form we want for Common Lisp. I am not sure about characters but we don't need it yet.
+Use lexpr::sexp macro.
+Please use Edit tool so that I can review.
+Well done. How would one translate zip loop in dot?
+Let's do dot.
+How should we deal with enum?
+Update doc/lisp.md.
+Why can't we always do equalp?
+Let's implement enum by doing geometry.
+I installed ECL. Test portability and update docs.
+How do you think things are going so far?
+/exit

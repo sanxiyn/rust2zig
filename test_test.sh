@@ -18,6 +18,7 @@ for dir in $dirs; do
     rust_dir="rust/${name}"
     zig_file="zig/${name}.zig"
     ml_dir="ml/${name}"
+    lisp_file="lisp/${name}.lisp"
 
     # Test Rust
     if (cd "$rust_dir" && cargo test --quiet) > /dev/null 2>&1; then
@@ -47,6 +48,27 @@ for dir in $dirs; do
         pass=$((pass + 1))
     else
         echo "FAIL $name (ml)"
+        fail=$((fail + 1))
+    fi
+
+    # Test Common Lisp
+    if [ ! -f "$lisp_file" ]; then
+        echo "SKIP $name (no lisp output)"
+    elif sbcl --script "$lisp_file" > /dev/null 2>&1; then
+        echo "PASS $name (lisp SBCL)"
+        pass=$((pass + 1))
+    else
+        echo "FAIL $name (lisp SBCL)"
+        fail=$((fail + 1))
+    fi
+
+    if [ ! -f "$lisp_file" ]; then
+        :
+    elif ecl --shell "$lisp_file" > /dev/null 2>&1; then
+        echo "PASS $name (lisp ECL)"
+        pass=$((pass + 1))
+    else
+        echo "FAIL $name (lisp ECL)"
         fail=$((fail + 1))
     fi
 done

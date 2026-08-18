@@ -41,7 +41,7 @@
     (assert (= 15 total))
     (assert (= 15 (sum xs)))
     (setf total 0)
-    (loop for x from 1 to 5
+    (loop for x of-type (signed-byte 32) from 1 to 5
           do (incf total x))
     (assert (= 15 total))))
 
