@@ -1,0 +1,20 @@
+Explore the project and give me a summary.
+Today we will write some more documentation. Recent features have design documents under design directory, but old features are not. For example, for Zig backend, we'd want design/closure.md and design/generic.md.
+Well done. I want to discuss some long term plans, maybe put it in PLAN.md. Current generic inference is clunky because it is based on SCIP. syn + SCIP has been very good for fast iteration, and it stood surprisingly far for a long time. But the eventual plan is to migrate to proper Rust frontend, maybe rustc, but probably rust-analyzer. Current generic inference is entirely stopgap so I don't want to invest there more than strictly necessary.
+/compact
+Are you familiar with Nadrieril's Rust via Desugarings?
+I haven't read the whole book, but looking at the table of contents, "Closure Desugarings" sounds useful, and I bet there are more.
+Yes, let's cite and update docs.
+I want to think about what to do with trait bounds. Erring in the definition is a feature I want to preserve from Rust. While it is normal to err in the instantiation in Zig, when it is translated from Rust all the information to check in the definition is in fact available. I think trait bounds should translate to comptime checks in comptime functions.
+Write design/bound.md. I'd only worry about user traits. For marker traits and operator traits, just note they are out of scope for now.
+Let's think about Common Lisp backend. Create lisp directory and let's do an example or two. Maybe iter?
+Is it worth putting (declare (type fixnum a b)) in gcd?
+Getting type-error seems good to me. Performance is bonus.
+Is it vector or simple-vector?
+Let's do sum.lisp.
+Let's do (block continue ...), but only if loop has continue.
+Write doc/lisp.md.
+I think iter's test-position should have (let ((l #(1 2 3 4 5)) (v 3)) ...), not two separate lets.
+How do you think things are going so far?
+/insights
+/exit
