@@ -99,8 +99,8 @@ impl Translator {
         }
     }
 
-    pub fn translate_return_type(&self, ret: &syn::ReturnType) -> Node {
-        match ret {
+    pub fn translate_return_type(&self, output: &syn::ReturnType) -> Node {
+        match output {
             syn::ReturnType::Default => Node::Identifier("void".to_string()),
             syn::ReturnType::Type(_, ty) => self.translate_type(ty),
         }

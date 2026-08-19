@@ -213,3 +213,7 @@ pub fn dotted_name(name: &str) -> Node {
     }
     node
 }
+
+pub fn todo(what: &str) -> Node {
+    Node::Todo(what.to_string())
+}

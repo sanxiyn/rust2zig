@@ -1,17 +1,17 @@
 use crate::ast::zig::{Capture, Node, Var};
-use super::Translator;
+use super::{Translator, todo};
 
 impl Translator {
     pub fn translate_break(&self, eb: &syn::ExprBreak) -> Node {
         if eb.label.is_some() || eb.expr.is_some() {
-            return Node::Todo("break".to_string());
+            return todo("break");
         }
         Node::Break(None, None)
     }
 
     pub fn translate_continue(&self, ec: &syn::ExprContinue) -> Node {
         if ec.label.is_some() {
-            return Node::Todo("continue".to_string());
+            return todo("continue");
         }
         Node::Continue
     }
@@ -33,7 +33,7 @@ impl Translator {
             }
         }
         let Some(by_ref) = self.iter_by_ref(&efl.expr) else {
-            return Node::Todo("for".to_string());
+            return todo("for");
         };
         let iterable = self.translate_expr(&efl.expr);
         let name = self.pat_name(&efl.pat);
@@ -48,10 +48,10 @@ impl Translator {
 
     fn translate_for_enumerate(&self, efl: &syn::ExprForLoop, emc: &syn::ExprMethodCall) -> Node {
         let syn::Pat::Tuple(pt) = &*efl.pat else {
-            return Node::Todo("for".to_string());
+            return todo("for");
         };
         if pt.elems.len() != 2 {
-            return Node::Todo("for".to_string());
+            return todo("for");
         }
         let (base, by_ref) = self.peel_iter(&emc.receiver);
         let iterable = self.translate_expr(base);
@@ -69,11 +69,11 @@ impl Translator {
     }
 
     fn translate_for_range(&self, efl: &syn::ExprForLoop, er: &syn::ExprRange) -> Node {
-        let (Some(start), Some(end)) = (&er.start, &er.end) else {
-            return Node::Todo("for".to_string());
-        };
         let syn::Pat::Ident(pi) = &*efl.pat else {
-            return Node::Todo("for".to_string());
+            return todo("for");
+        };
+        let (Some(start), Some(end)) = (&er.start, &er.end) else {
+            return todo("for");
         };
         let name = pi.ident.to_string();
         let ty = self.scip.type_at(&pi.ident.span().into());
@@ -115,10 +115,10 @@ impl Translator {
 
     fn translate_for_zip(&self, efl: &syn::ExprForLoop, ec: &syn::ExprCall) -> Node {
         let syn::Pat::Tuple(pt) = &*efl.pat else {
-            return Node::Todo("for".to_string());
+            return todo("for");
         };
         if pt.elems.len() != ec.args.len() {
-            return Node::Todo("for".to_string());
+            return todo("for");
         }
         let mut iterables = vec![];
         for arg in ec.args.iter() {

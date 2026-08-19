@@ -426,13 +426,12 @@ impl Translator {
     }
 
     fn translate_unary(&self, eu: &syn::ExprUnary) -> Node {
+        let expr = self.translate_expr(&eu.expr);
         match eu.op {
             syn::UnOp::Deref(_) => {
-                let expr = self.translate_expr(&eu.expr);
                 Node::Deref(Box::new(expr))
             }
             syn::UnOp::Not(_) => {
-                let expr = self.translate_expr(&eu.expr);
                 Node::BoolNot(Box::new(expr))
             }
             _ => {
