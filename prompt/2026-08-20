@@ -1,0 +1,26 @@
+Explore the project and give me a summary. Also read prompt/2026-08-18 for what happened in the last session.
+In the last session you pointed out sexp!((#"unsigned-byte" 32)) is reserved in Rust 2024. It is, but I found sexp!((# "unsigned-byte" 32)) (note the space) is fine, see src/translate/lisp/ty.rs.
+sexp! has unquote, but it doesn't have unquote-splicing, does it?
+Drop dotted tail. I think we can use to_vec() to do something similar, see src/translate/lisp/flow.rs.
+Go over the lisp backend and find places we could use to_vec(), and use it.
+Good job. I reviewed lisp/bitset.lisp. bit-set-contains probably should use logbitp?
+Let's do div.
+What should we do for closure?
+Let's do closure.
+Please use Edit tool so that I can review.
+Let's do option.
+In 6c8093e direction was deleted. Let's resurrect it and implement data-less enum for Common Lisp.
+What do we need for random?
+Write the plan to lisp-random.md.
+Well done. Let's do step 1: implement associated const. defconstant +rand32-default-inc+ design looks good.
+Shouldn't you use sexp!((defconstant ,name, value)) here?
+Let's do step 2: structure expression with Self.
+Thinking about it, shouldn't we deal with Self in self_type desugar?
+Let's do step 3: let with wildcard pattern.
+Let's do step 4: wrapping operations.
+See prompt/2026-08-01 for how to read SCIP index.
+Let's do step 5: rotation.
+Let's do step 6: casts.
+Pare down and re-organize lisp-random.md to be about design decisions, not implementation and sequencing. Code is canonical about implementation. You can mention function names to lookup the implementation and that's it.
+How do you think things are going so far?
+/exit
