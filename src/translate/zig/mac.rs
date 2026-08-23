@@ -1,5 +1,5 @@
 use crate::ast::zig::Node;
-use super::{Translator, dotted_name};
+use super::{Translator, dotted_name, todo};
 
 impl Translator {
     pub fn translate_macro(&self, mac: &syn::Macro) -> Option<Node> {
@@ -41,7 +41,7 @@ impl Translator {
     }
 
     fn translate_println(&self, _mac: &syn::Macro) -> Node {
-        Node::Todo("println".to_string())
+        todo("println")
     }
 
     fn translate_macro_args(&self, mac: &syn::Macro) -> Vec<Node> {

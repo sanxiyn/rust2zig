@@ -1,11 +1,11 @@
 use crate::ast::zig::Node;
-use super::Translator;
+use super::{Translator, todo};
 
 impl Translator {
     pub fn translate_type(&self, ty: &syn::Type) -> Node {
         if let Some((ok, error)) = self.result_types(ty) {
             if !self.is_error_set(&error) {
-                return Node::Todo("type".to_string());
+                return todo("type");
             }
             let error = self.translate_type(&error);
             let ok = self.translate_type(&ok);
@@ -19,8 +19,7 @@ impl Translator {
             }
             syn::Type::Path(tp) => {
                 let segment = tp.path.segments.last().unwrap();
-                let ident = &segment.ident;
-                let name = ident.to_string();
+                let name = segment.ident.to_string();
                 match name.as_str() {
                     "bool"
                     | "i8" | "i16" | "i32" | "i64" | "i128" | "isize"
@@ -28,26 +27,18 @@ impl Translator {
                         Node::Identifier(name)
                     }
                     _ if self.check_moniker(&tp.path, "core::cell::Cell") => {
-                        if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
-                            if let Some(syn::GenericArgument::Type(inner_ty)) = args.args.first() {
-                                self.translate_type(inner_ty)
-                            } else {
-                                Node::Todo("type".to_string())
-                            }
+                        if let Some(inner_ty) = type_argument(segment) {
+                            self.translate_type(inner_ty)
                         } else {
-                            Node::Todo("type".to_string())
+                            todo("type")
                         }
                     }
                     _ if self.check_moniker(&tp.path, "core::option::Option") => {
-                        if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
-                            if let Some(syn::GenericArgument::Type(inner_ty)) = args.args.first() {
-                                let ty = self.translate_type(inner_ty);
-                                Node::OptionalType(Box::new(ty))
-                            } else {
-                                Node::Todo("type".to_string())
-                            }
+                        if let Some(inner_ty) = type_argument(segment) {
+                            let ty = self.translate_type(inner_ty);
+                            Node::OptionalType(Box::new(ty))
                         } else {
-                            Node::Todo("type".to_string())
+                            todo("type")
                         }
                     }
                     _ => {
@@ -95,7 +86,7 @@ impl Translator {
                 }
                 Node::TupleType(elements)
             }
-            _ => Node::Todo("type".to_string()),
+            _ => todo("type")
         }
     }
 
@@ -110,4 +101,10 @@ impl Translator {
 fn is_str(ty: &syn::Type) -> bool {
     let syn::Type::Path(tp) = ty else { return false };
     tp.path.is_ident("str")
+}
+
+fn type_argument(segment: &syn::PathSegment) -> Option<&syn::Type> {
+    let syn::PathArguments::AngleBracketed(args) = &segment.arguments else { return None };
+    let syn::GenericArgument::Type(ty) = args.args.first()? else { return None };
+    Some(ty)
 }
