@@ -85,27 +85,25 @@ impl Translator {
     }
 
     pub fn translate_method_call(&self, emc: &syn::ExprMethodCall) -> Node {
+        let receiver = self.translate_expr(&emc.receiver);
+        if self.check_moniker_ident(&emc.method, "core::cell::Cell::get") {
+            return receiver;
+        }
+        if self.check_moniker_ident(&emc.method, "core::cell::Cell::set") {
+            let value = self.translate_expr(&emc.args[0]);
+            return Node::Assign(Box::new(receiver), Box::new(value));
+        }
+        if self.check_moniker_ident(&emc.method, "core::result::Result::unwrap") {
+            return Node::Try(Box::new(receiver));
+        }
         if self.check_moniker_ident(&emc.method, "core::slice::len") {
-            let base = self.translate_expr(&emc.receiver);
             return Node::FieldAccess(
-                Box::new(base),
+                Box::new(receiver),
                 "len".to_string(),
             );
         }
         if self.check_moniker_ident(&emc.method, "core::str::as_bytes") {
-            return self.translate_expr(&emc.receiver);
-        }
-        if self.check_moniker_ident(&emc.method, "core::result::Result::unwrap") {
-            let base = self.translate_expr(&emc.receiver);
-            return Node::Try(Box::new(base));
-        }
-        if self.check_moniker_ident(&emc.method, "core::cell::Cell::get") {
-            return self.translate_expr(&emc.receiver);
-        }
-        if self.check_moniker_ident(&emc.method, "core::cell::Cell::set") {
-            let place = self.translate_expr(&emc.receiver);
-            let value = self.translate_expr(&emc.args[0]);
-            return Node::Assign(Box::new(place), Box::new(value));
+            return receiver;
         }
         if let Some(node) = self.translate_wrapping(emc) {
             return node;
@@ -116,9 +114,8 @@ impl Translator {
         if let Some(node) = self.translate_rotate(emc) {
             return node;
         }
-        let base = self.translate_expr(&emc.receiver);
         let method = escape_zig(&snake_to_camel(&emc.method.to_string()));
-        let func = Node::FieldAccess(Box::new(base), method);
+        let func = Node::FieldAccess(Box::new(receiver), method);
         let mut args = vec![];
         if let Some(generic_args) = &emc.turbofish {
             for arg in &generic_args.args {

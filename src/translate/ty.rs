@@ -20,6 +20,14 @@ pub fn int_bits(ty: &syn::Type) -> Option<u32> {
     }
 }
 
+pub fn unsigned_bits(ty: &syn::Type) -> Option<u32> {
+    let syn::Type::Path(tp) = ty else { return None };
+    if !tp.path.segments.last()?.ident.to_string().starts_with('u') {
+        return None;
+    }
+    int_bits(ty)
+}
+
 pub fn is_closure_type(ty: &syn::Type) -> bool {
     let syn::Type::ImplTrait(it) = ty else { return false };
     it.bounds.iter().any(|bound| {
