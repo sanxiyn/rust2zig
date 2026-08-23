@@ -1,5 +1,11 @@
 pub fn suffix(path: &str) -> Option<&'static str> {
     let suffix = match path {
+        "alloc::boxed::Box" => "boxed/Box#",
+        "alloc::boxed::Box::new" => "boxed/impl#[`Box<T>`]new().",
+        "alloc::macros::vec" => "macros/vec!",
+        "alloc::vec::Vec::len" => "vec/impl#[`Vec<T, A>`]len().",
+        "alloc::vec::Vec::pop" => "vec/impl#[`Vec<T, A>`]pop().",
+        "alloc::vec::Vec::push" => "vec/impl#[`Vec<T, A>`]push().",
         "core::cell::Cell" => "cell/Cell#",
         "core::cell::Cell::get" => "cell/impl#[`Cell<T>`]get().",
         "core::cell::Cell::new" => "cell/impl#[`Cell<T>`]new().",

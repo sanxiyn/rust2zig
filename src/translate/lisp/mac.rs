@@ -1,6 +1,6 @@
 use lexpr::{Value, sexp};
 
-use super::{Translator, call, todo};
+use super::{Translator, call, list_of, symbol, todo};
 
 impl Translator {
     pub fn translate_macro(&self, mac: &syn::Macro) -> Option<Value> {
@@ -12,6 +12,8 @@ impl Translator {
             Some(self.translate_panic(mac))
         } else if self.check_moniker(&mac.path, "std::macros::println") {
             Some(self.translate_println(mac))
+        } else if self.check_moniker(&mac.path, "alloc::macros::vec") {
+            Some(self.translate_vec(mac))
         } else {
             None
         }
@@ -45,6 +47,19 @@ impl Translator {
 
     fn translate_println(&self, _mac: &syn::Macro) -> Value {
         todo("println")
+    }
+
+    fn translate_vec(&self, mac: &syn::Macro) -> Value {
+        let args = macro_args(mac);
+        let size = args.len() as u64;
+        let mut items = vec![];
+        items.extend(sexp!((,size # ":adjustable" t # ":fill-pointer" t)).to_vec().unwrap());
+        if !args.is_empty() {
+            let elements = args.iter().map(|arg| self.translate_expr(arg)).collect();
+            items.push(symbol(":initial-contents"));
+            items.push(list_of("list", elements));
+        }
+        call("make-array", items)
     }
 }
 

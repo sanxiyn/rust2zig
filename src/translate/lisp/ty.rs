@@ -23,6 +23,13 @@ impl Translator {
                     "char" => sexp!(character),
                     "isize" | "usize" => sexp!(fixnum),
                     "str" | "String" | "Vec" => sexp!(vector),
+                    _ if self.check_moniker(&tp.path, "alloc::boxed::Box") => {
+                        if let Some(inner_ty) = type_argument(segment) {
+                            self.translate_type(inner_ty)
+                        } else {
+                            todo("type")
+                        }
+                    }
                     _ if self.check_moniker(&tp.path, "core::cell::Cell") => {
                         if let Some(inner_ty) = type_argument(segment) {
                             self.translate_type(inner_ty)

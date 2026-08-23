@@ -222,7 +222,7 @@ the program's, and Common Lisp array indices are fixnums by construction.
 `Option<T>` maps onto a Common Lisp union type, so a return type stays fully
 described rather than degrading to `t`.
 
-### Slices are `vector`, never `simple-vector`
+### Slices are vector
 
 `simple-vector` means `(simple-array t (*))` -- element type exactly `t` -- and
 it is true of `#(1 2 3 4 5)`, which is precisely why it is a trap:
@@ -306,7 +306,7 @@ resolves one against `structs`, and the same two lookups drive both a path
 expression and a pattern.
 
 The one construct this encoding cannot express is `_`; see
-[Wildcard arms](#wildcard-arms-are-not-implemented).
+[Wildcard arms](#wildcard-arms).
 
 ### Data-carrying: one `defstruct` per variant, unioned by `deftype`
 
@@ -387,9 +387,24 @@ Two things follow, and the first is a defect in the rule as it stands today:
   what a human writes.
 
 So the rule is `=` for numbers, `equal` for strings and characters, `equalp`
-for structures and vectors -- the last of which is settled but not yet emitted,
-as [Not implemented yet](#not-implemented-yet) records. The remaining case is an
-erased `T`, as in
+for structures and vectors. All three are emitted: `Sort::Aggregate` covers a
+crate struct, a data-carrying enum, and an array, slice, or `Vec`, and it is
+tested *before* the string case rather than after. Knowing that either operand
+is an aggregate settles the choice on its own, because Rust's `==` is
+homogeneous -- so the other operand is an aggregate too, and the case folding
+that is `equalp`'s only disagreement with Rust cannot arise.
+
+A payload-free enum is deliberately not an aggregate. Its variants are
+keywords, which `equal` compares correctly, so the two halves of the enum
+encoding want different equalities -- `is_data_enum` is what tells them apart,
+by asking whether any variant became a `defstruct`. Getting this wrong is
+visible immediately: `lisp/direction.lisp` is nothing but `equal` on keywords.
+
+`Option` stays out too, and must. Peeling it to sort by its payload would make
+`Option<i32>` a number, and `=` signals on the `nil` that `None` erases to,
+where `equal` answers. `Result` has no encoding yet.
+
+The remaining case is an erased `T`, as in
 `lisp/iter.lisp`'s `*e == v`, where neither answer is safe: `equal` risks a
 false negative if `T` is a struct, `equalp` a false positive if `T` is a
 string. Erasure destroys what the choice needs, so this one is a known
@@ -473,45 +488,78 @@ but a clause reads its slots through accessors named for one struct
 (`shape-dot-v0`), so the arm would need a different accessor per alternative.
 A binding inside an or-pattern therefore leaves a marker.
 
-### Wildcard arms are not implemented
+### Wildcard arms
 
-A `match` with a `_` arm is a `todo` marker, and the reason is the same thing
-that makes both encodings worth having. The `e` in `ecase` and `etypecase`
-stands for *error*: the form signals when no clause matches, where `case` and
-`typecase` return `nil`. A wildcard is precisely a clause that always matches,
-so it makes that error unreachable, and the two cannot coexist usefully. No
-fixture has a wildcard, since rustc makes `_` pointless over an enum whose
-variants are all listed.
+The `e` in `ecase` and `etypecase` stands for *error*: the form signals when no
+clause matches, where `case` and `typecase` return `nil`. A wildcard is
+precisely a clause that always matches, so it makes that error unreachable, and
+the two cannot coexist usefully.
 
-On the keyword side there is no clause to write. `ecase` reads its keys
-literally, so `(t ...)` is a clause for the *symbol* `T` rather than a
-catch-all -- `(ecase :x (:a 1) (t 2))` signals on both implementations, and
-matches only when the key really is `T`. `translate_match` therefore looks for a
-wildcard among the arms before it commits to `ecase`, and emits the marker.
+The rule is one for both halves: **a match carrying a `_` emits the plain
+`case` or `typecase`, and every other match keeps the `e` form.** So the head
+is chosen on two independent questions:
 
-On the struct side `_` is not rejected today, and that is the worse failure:
-`translate_pat` gives it the key `t`, which inside an `etypecase` is the
-universal *type specifier* and so matches every object. The clause works, and
-the error the `e` stands for is quietly dead code -- an `etypecase` that can no
-longer signal is a `typecase` wearing the wrong name.
+| | no `_` | with `_` |
+|---|---|---|
+| by value | `ecase` | `case` |
+| by type | `etypecase` | `typecase` |
 
-The plan is one rule for both halves: emit the plain `case` or `typecase` for
-exactly those matches that carry a wildcard, and keep the `e` form for the rest.
 What is given up is the runtime echo of exhaustiveness -- fall-through returns
 `nil` instead of signalling -- which is most of why the `e` forms were chosen,
-though it only re-checks at runtime a property rustc has already checked.
+though it only re-checks at runtime a property rustc has already checked. What
+is bought is the `_` arm itself, which [literal patterns](#literal-patterns)
+cannot do without: rustc requires a catch-all over integers and characters, so
+nearly every literal match has one.
+
+Before this, the two halves failed differently and the struct side failed
+worse. On the keyword side there was no clause to write and `translate_match`
+emitted a marker: `ecase` reads its keys literally, so `(t ...)` is a clause
+for the *symbol* `T` rather than a catch-all -- `(ecase :x (:a 1) (t 2))`
+signals on both implementations. On the struct side `_` was not rejected at
+all, and `translate_pat`'s key `t` is the universal *type specifier* inside an
+`etypecase`, so the clause worked and the error the `e` stands for was quietly
+dead code -- an `etypecase` that can no longer signal being a `typecase`
+wearing the wrong name.
 
 **Spell the fallback `t`, not `otherwise`.** The two are interchangeable in
 `case` and in `typecase` alike: either symbol in key-designator position is the
 fallback clause, and either as a *literal* key is written as the one-element
-list `(t)` or `(otherwise)`. Checked both directions on SBCL and ECL, and
-neither can arise as a key here in any case, every key being a keyword.
+list `(t)` or `(otherwise)`. Checked both directions on SBCL and ECL.
 
 So the choice is style, and `t` wins on the `typecase` side, where it is not a
 fallback marker at all but the universal type specifier: every clause stays a
-type specifier, and the last one needs no symbol the others do not use. Using it
-in `case` as well gives the two halves one spelling, and it is what
+type specifier, and the last one needs no symbol the others do not use. Using
+it in `case` as well gives the two halves one spelling, and it is what
 `translate_pat` already returns for `Pat::Wild`.
+
+### Literal patterns
+
+A literal arm dispatches by value, so it takes the same `case` family a
+payload-free enum's keywords do -- `value_pat` answers for both, and an
+or-pattern of literals is one clause with a list key, `((1 2) ...)`, exactly as
+an or-pattern of keywords is.
+
+```lisp
+(defun concat-into-ast (self)
+  (case (length (concat-asts self))
+    (0 (ast-empty (concat-span self)))
+    (1 ...)
+    (t (ast-concat self))))
+```
+
+**`t` and `nil` as keys have to be written as one-element lists.** A Rust
+`bool` literal translates to `t` or `nil`, and both are reserved in
+key-designator position: bare `t` is the fallback clause rather than the symbol,
+and bare `nil` is the *empty list of keys*, which matches nothing. So
+`match b { true => .., false => .. }` written the bare way is wrong twice over,
+and the two implementations disagree about how: SBCL compiles
+`(case b (t :true) (nil :false))` and answers `:true` for both, while ECL
+rejects it outright with "the selector T can only appear at the last position".
+Emitted as `((t) :true) ((nil) :false)` it is right on both. Verified.
+
+This is the same escape the fallback discussion above describes, arrived at
+from the other side -- and it is the one place where a *literal* `t` and a
+*fallback* `t` can both appear in one form.
 
 ## Control flow
 
@@ -537,6 +585,11 @@ in `case` as well gives the two halves one spelling, and it is what
 
 * `if` / `else` is `(if c a b)`; a guard with no else is `(when c ...)`.
 * `while` is `(loop while c do ...)`.
+* an unconditional `loop` is the same shape with the test dropped,
+  `(loop do ...)`. A `do`-only `loop` is still the *extended* form rather than
+  the simple one, so it establishes the implicit `nil` block that `break`
+  already targets and needs nothing added for it. Verified on SBCL and ECL,
+  including that a `continue` block nests inside correctly.
 
 ## `for` loops and ranges
 
@@ -667,12 +720,50 @@ against Rust.
   check.
 * **Vectors.** `xs[i]` is `(aref xs i)`, `xs.len()` is `(length xs)`, and an
   array literal `[1, 2, 3]` is `#(1 2 3)`.
+
+  A `Vec` is the growable case and needs a different construction: an
+  adjustable vector with a fill pointer,
+  `(make-array 0 :adjustable t :fill-pointer t)`, which `vec![]` becomes and
+  `vec![a, b]` fills through `:initial-contents`. That is what makes `push`
+  and `pop` exist at all -- a `#(...)` literal is fixed-size and has neither --
+  and it leaves `length` reading the fill pointer, so the count is Rust's.
+  `v.push(x)` is `(vector-push-extend x v)`, the one translated method whose
+  receiver is not the first argument, and `v.pop()` is `(vector-pop v)`.
+
+  Both spellings satisfy the same `vector` declaration, which is
+  [Slices are vector](#slices-are-vector) paying off: a
+  fixed literal, an adjustable vector, and a string are one declared type and
+  three representations. `equalp` compares across them, so a `Vec` and a
+  `&[T]` holding the same elements answer equal.
+
+  `pop` is the one divergence. Rust answers `None` on an empty vector where
+  `vector-pop` signals, on both implementations. Under the `nil` erasure a
+  faithful translation would test the fill pointer first; nothing needs it yet,
+  and a signal is the safer of the two ways to be wrong.
 * **`Option` is `nil`.** `None` is `nil` and `Some(x)` is `x`, which is
   idiomatic -- CL's own `position` returns exactly that. It is only sound when
   the payload can never itself be `nil`/false, so it collapses `Some(false)`,
   `Some(nil)`, and `Option<Option<T>>`. This is the same shape as
   `design/result.md`'s payload-free test and needs the same explicit statement
   of when the erasure is legal. `rust/option` will decide it.
+
+  `unwrap` is the one operation on it that does *not* erase. Under the
+  encoding the payload already is the option, so `o.unwrap()` could be `o` --
+  and that is exactly the argument against it, since `o.unwrap()` and `o` would
+  then translate identically and the only thing the source said would be gone.
+  `unwrap`'s whole content is "panic if this is `None`", so it keeps the check:
+
+  ```lisp
+  (or (vector-pop (concat-asts self))
+      (error "called Option::unwrap() on a None value"))
+  ```
+
+  `or` returns the receiver when it is non-nil and evaluates it once, and it
+  errors exactly where Rust panics -- sound on the same condition the encoding
+  already rests on. This is the same make-the-check-loud reasoning that keeps
+  `=` for numbers and declares integer types. It is `core`'s `unwrap` only: a
+  crate that defines its own `Option` keeps its `option-unwrap`, which is what
+  the moniker check is for, and `lisp/option.lisp` pins both halves.
 
   `lisp/div.lisp` is where the encoding pays off. `if let Some(x) = e` is a test
   and a binding at once, which is exactly what `nil` already gives: bind `x` to
@@ -804,20 +895,27 @@ The translator covers functions, locals, control flow, arithmetic, indexing,
 Everything below leaves a `todo` marker rather than disappearing --
 `(todo "expr")` inline, so it is loud, and `;; TODO: mod` at top level, so the
 rest of the file still loads. Twelve of the sixteen Rust examples translate
-marker-free, and those twelve are exactly the ones with a `lisp/` fixture.
+marker-free, and those twelve are exactly the ones with a `lisp` fixture.
 
-* **A `match` with a `_` arm.** A marker on the keyword side, and a silently
-  toothless `etypecase` on the struct side. Both want the plain `case` /
-  `typecase` with a final `(t ...)` clause; see
-  [Wildcard arms](#wildcard-arms-are-not-implemented).
-* **A binding inside an or-pattern**, and an or-pattern of *literals*. The
-  alternation itself is implemented; see
+`doc/lisp-regex.md` inventories the largest of the four that do not, and is
+worth reading alongside this list: `rust/regex` reaches most of what is below
+at once, and it also found six places where an unhandled construct is *not*
+loud. One of those is worth stating here, since it applied to every crate
+rather than to `regex`: an unrecognized *qualified* callee used to fall through
+to its own last path segment, so `Box::new(x)` emitted `(new x)` -- a call to a
+function nothing defines. A qualified path that names no crate type now leaves
+`(todo "call")` instead. An unqualified one still falls through, that being how
+a crate-defined free function is called, which is why `Ok(...)` remains
+untranslated rather than marked.
+
+* **A binding inside an or-pattern.** The alternation itself is implemented,
+  for literals as well as keywords and types; see
   [An or-pattern is one clause](#an-or-pattern-is-one-clause) for why a binding
-  is not. Literals want the same list key, `((1 2) ...)`, but need `Pat::Lit`,
-  which no arm of `translate_pat` handles.
-* **`equalp` as a third equality.** Structs compare by identity under `equal`,
-  so `assert_eq!` on a struct answers wrongly. No current example compares two
-  structs -- `geometry` compares their fields -- so this has not bitten yet.
+  is not.
+* **A `match` whose arm is a bare binding.** `match e { c => ... }` binds the
+  scrutinee and always matches, so it is a `let` in disguise rather than a
+  dispatch, and `translate_pat` has no arm for `Pat::Ident`. `rust/regex` is
+  where it shows.
 * **`Option` and `Result`.** `None` is `nil` and `Some(x)` is `x` today, which
   `rust/iter` exercises and `rust/div` pins in a signature and an `if let` -- it
   is only sound while the payload can never itself be `nil` or false. No fixture
@@ -826,8 +924,26 @@ marker-free, and those twelve are exactly the ones with a `lisp/` fixture.
   missing is `match` on a `core` `Option`: it reaches the `etypecase` path,
   finds no variant structs, and leaves a marker. `Result` and `?` have no design
   at all.
-* **Method calls.** Recognized by moniker one at a time: slice `len`, the
-  `wrapping_*` family, and `rotate_right`. Anything else leaves a marker.
+* **Method calls on foreign types.** A method on a *crate-defined* type is
+  implemented and needs no moniker: `translate_method_call` asks `expr_ty` for
+  the receiver's type and emits the prefixed call when that type is one of the
+  crate's structs or enums, which is the rule
+  [Methods](#methods-and-the-road-not-taken) states. What is recognized one
+  moniker at a time is the rest -- slice `len`, `Cell::get` and `Cell::set`,
+  `Vec`'s `len`, `push`, and `pop`, `Option::unwrap`, the `wrapping_*` family,
+  and `rotate_right` -- and anything else leaves a marker.
+
+  The remaining markers are all of that second kind, and nearly all of them are
+  [Strings and chars](#not-implemented-yet) rather than a gap in the dispatch:
+  `rust/hash` wants `as_bytes`, and `rust/regex` wants `chars`, `next`,
+  `checked_add`, `len_utf8`, `is_some`, and `str`'s own `len`, which the slice
+  moniker does not match.
+
+  `Cell` erasure is free here for the reason `&mut self` is: a Common Lisp
+  structure is a reference already, so `design/cell.md`'s Zig question -- which
+  pointers lose their `const` -- does not arise. `get` is its receiver and
+  `set` is a `setf` of it. Only `rust/regex` exercises this, and it has no
+  fixture, so it is emitted but unpinned.
 * **Strings and chars.** `design/string.md`'s question reappears: CL strings are
   character vectors, not byte vectors, so `&str` and `&[u8]` cannot share a
   representation the way they do in OCaml.

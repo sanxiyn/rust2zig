@@ -1,0 +1,20 @@
+Explore the project and give me a summary.
+Today we will work on Common Lisp backend. Read doc/lisp.md and doc/lisp-random.md to get up to speed.
+Method calls are working. I am not sure why doc claims otherwise, but confirm yourself and fix.
+Write a detailed inventory of what's missing for regex to doc/lisp-regex.md.
+Handle Cell::get in expr_ty.
+Leave that alone.
+Handle loop.
+Handle newline character.
+Let's just do Newline for now.
+Emit call TODO marker for associated functions on foreign types.
+Handle Cell::new erasure.
+Add alloc::boxed::Box and alloc::boxed::Box::new to the table.
+Handle Box erasure.
+Add aggregate sort and use equalp for aggregate equality.
+Handle Vec.
+Handle literal pattern.
+Handle Option::unwrap.
+How do you think things are going so far?
+/insights
+/exit

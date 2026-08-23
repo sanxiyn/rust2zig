@@ -13,8 +13,22 @@ impl Translator {
             let value = self.translate_expr(&emc.args[0]);
             return sexp!((setf ,receiver ,value));
         }
-        if self.check_moniker_ident(&emc.method, "core::slice::len") {
+        if self.check_moniker_ident(&emc.method, "core::option::Option::unwrap") {
+            let message = Value::string("called Option::unwrap() on a None value");
+            let panic = call("error", vec![message]);
+            return sexp!((or ,receiver ,panic));
+        }
+        if self.check_moniker_ident(&emc.method, "core::slice::len")
+            || self.check_moniker_ident(&emc.method, "alloc::vec::Vec::len")
+        {
             return sexp!((length ,receiver));
+        }
+        if self.check_moniker_ident(&emc.method, "alloc::vec::Vec::pop") {
+            return sexp!((# "vector-pop" ,receiver));
+        }
+        if self.check_moniker_ident(&emc.method, "alloc::vec::Vec::push") {
+            let value = self.translate_expr(&emc.args[0]);
+            return sexp!((# "vector-push-extend" ,value ,receiver));
         }
         if let Some(value) = self.translate_wrapping(emc) {
             return value;
