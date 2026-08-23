@@ -93,9 +93,12 @@ granularity, since Common Lisp has no per-type namespace.
 A crate function whose name is an external symbol of `COMMON-LISP` must be
 declared in `(:shadow ...)`.
 
-This is not a rare case. Of the 84 distinct function names across the current
-Rust fixtures, five collide: `eval`, `gcd`, `max`, `min`, `position`. Both
-`lisp/gcd.lisp` and `lisp/iter.lisp` need a shadow.
+This is not a rare case. Of the 78 distinct free-function names across the
+current Rust fixtures, four collide: `gcd`, `max`, `min`, `position`, so
+`lisp/gcd.lisp`, `lisp/iter.lisp`, and `lisp/geometry.lisp` each need a shadow.
+Only a *free* function can collide -- a method or an associated function takes
+its type as a prefix, `Option::and` becoming `option-and`, which is why the 33
+method names contribute none even though `and` and `char` are among them.
 
 The rule is mechanical -- for each name the crate defines, `find-symbol` it in
 `:common-lisp` and shadow it when the status is `:external`. It needs no type
@@ -248,10 +251,11 @@ do not control.
 
 ## Structs and enums
 
-**Implemented for the data-carrying half**, driven by `rust/geometry`
-(`Shape`, with a tuple variant and a struct variant) and `rust/bitset` (a
-struct with methods and an associated function). The payload-free half below
-is designed but unbuilt, no example having a C-like enum.
+**Both halves are implemented.** The data-carrying one is driven by
+`rust/geometry` (`Shape`, with a tuple variant and a struct variant) and
+`rust/bitset` (a struct with methods and an associated function); the
+payload-free one by `rust/direction`, added for it, since no earlier example
+had a C-like enum.
 
 The encoding splits on whether any variant carries data -- the same predicate
 the Zig backend's `analyze` already computes as `has_data` to choose between
@@ -290,7 +294,7 @@ error on fall-through is the runtime echo of the exhaustiveness rustc already
 checked.
 
 It also sidesteps [Packages and names](#packages-and-names) entirely. Keywords
-live in the `KEYWORD` package, so a `Red` in two different enums cannot
+live in the `KEYWORD` package, so a `North` in two different enums cannot
 collide, and none of them need `:shadow` or `:export`. That is why a
 payload-free enum defines no names at all beyond its type: `analyze` skips
 `define_struct` for its variants, where a data-carrying enum has to register a
@@ -301,20 +305,18 @@ Being values rather than types, the variants are not in `structs`;
 resolves one against `structs`, and the same two lookups drive both a path
 expression and a pattern.
 
-The one construct this encoding cannot express is `_`. `ecase` reads its keys
-literally, so `t` would be the symbol `T` rather than a catch-all -- `case` with
-a final `(t ...)` clause is the shape that means it, at the cost of the
-exhaustiveness echo that makes `ecase` worth choosing. A wildcard arm therefore
-leaves a marker rather than a wrong answer; no fixture has one, since rustc
-makes `_` pointless over an enum whose variants are all listed.
+The one construct this encoding cannot express is `_`; see
+[Wildcard arms](#wildcard-arms-are-not-implemented).
 
 ### Data-carrying: one `defstruct` per variant, unioned by `deftype`
 
 ```lisp
-(defstruct shape-circle (center nil :type point) (radius 0 :type (signed-byte 32)))
+(defstruct shape-circle
+  (center nil :type point)
+  (radius 0 :type (signed-byte 32)))
 (deftype shape () '(or shape-dot shape-line shape-circle))
 
-(declaim (ftype (function (shape) list) bounding-box))
+(declaim (ftype (function (shape) (values (signed-byte 32) (signed-byte 32) (signed-byte 32) (signed-byte 32))) bounding-box))
 (defun bounding-box (s)
   (etypecase s
     (shape-circle (let ((center (shape-circle-center s))
@@ -385,7 +387,9 @@ Two things follow, and the first is a defect in the rule as it stands today:
   what a human writes.
 
 So the rule is `=` for numbers, `equal` for strings and characters, `equalp`
-for structures and vectors. The remaining case is an erased `T`, as in
+for structures and vectors -- the last of which is settled but not yet emitted,
+as [Not implemented yet](#not-implemented-yet) records. The remaining case is an
+erased `T`, as in
 `lisp/iter.lisp`'s `*e == v`, where neither answer is safe: `equal` risks a
 false negative if `T` is a struct, `equalp` a false positive if `T` is a
 string. Erasure destroys what the choice needs, so this one is a known
@@ -432,6 +436,82 @@ no special treatment at all. It becomes `option-some` and `option-none`
 `defstruct`s under a `deftype` union, its `unwrap` an `etypecase`, exactly as
 `geometry`'s `shape` does. The name is a coincidence the moniker check sees
 through.
+
+## Pattern matching
+
+Which form a `match` becomes is decided by
+[Structs and enums](#structs-and-enums): `ecase` over keywords for a
+payload-free enum, `etypecase` over variant structs for a data-carrying one.
+What is left is what the arms themselves may contain, and the two halves answer
+alike often enough that a pattern is worth stating once for both.
+
+### An or-pattern is one clause
+
+`Direction::North | Direction::South => true` needs no expansion, because
+Common Lisp already spells the alternation twice over: a `case` key designator
+may be a *list* of keys, and a type specifier composes with `or`.
+
+```lisp
+(declaim (ftype (function (direction) boolean) vertical))
+(defun vertical (d)
+  (ecase d
+    ((:north :south) t)
+    ((:east :west) nil)))
+```
+
+`rust/direction`'s `vertical` is the fixture. The struct side takes the same
+shape as a type, `((or shape-dot shape-line) ...)`, which the code emits and no
+example exercises yet. Both were checked on SBCL and ECL before being emitted.
+
+Choosing between `ecase` and `etypecase` has to look *through* the alternation,
+since such an arm is no longer a bare path -- `keyword_pat` answers for an
+or-pattern by asking its alternatives, which all name variants of the one enum.
+
+What an alternative may not carry is a binding. Rust allows
+`Shape::Dot(p) | Shape::Line(p, _)`, each alternative binding the same names,
+but a clause reads its slots through accessors named for one struct
+(`shape-dot-v0`), so the arm would need a different accessor per alternative.
+A binding inside an or-pattern therefore leaves a marker.
+
+### Wildcard arms are not implemented
+
+A `match` with a `_` arm is a `todo` marker, and the reason is the same thing
+that makes both encodings worth having. The `e` in `ecase` and `etypecase`
+stands for *error*: the form signals when no clause matches, where `case` and
+`typecase` return `nil`. A wildcard is precisely a clause that always matches,
+so it makes that error unreachable, and the two cannot coexist usefully. No
+fixture has a wildcard, since rustc makes `_` pointless over an enum whose
+variants are all listed.
+
+On the keyword side there is no clause to write. `ecase` reads its keys
+literally, so `(t ...)` is a clause for the *symbol* `T` rather than a
+catch-all -- `(ecase :x (:a 1) (t 2))` signals on both implementations, and
+matches only when the key really is `T`. `translate_match` therefore looks for a
+wildcard among the arms before it commits to `ecase`, and emits the marker.
+
+On the struct side `_` is not rejected today, and that is the worse failure:
+`translate_pat` gives it the key `t`, which inside an `etypecase` is the
+universal *type specifier* and so matches every object. The clause works, and
+the error the `e` stands for is quietly dead code -- an `etypecase` that can no
+longer signal is a `typecase` wearing the wrong name.
+
+The plan is one rule for both halves: emit the plain `case` or `typecase` for
+exactly those matches that carry a wildcard, and keep the `e` form for the rest.
+What is given up is the runtime echo of exhaustiveness -- fall-through returns
+`nil` instead of signalling -- which is most of why the `e` forms were chosen,
+though it only re-checks at runtime a property rustc has already checked.
+
+**Spell the fallback `t`, not `otherwise`.** The two are interchangeable in
+`case` and in `typecase` alike: either symbol in key-designator position is the
+fallback clause, and either as a *literal* key is written as the one-element
+list `(t)` or `(otherwise)`. Checked both directions on SBCL and ECL, and
+neither can arise as a key here in any case, every key being a keyword.
+
+So the choice is style, and `t` wins on the `typecase` side, where it is not a
+fallback marker at all but the universal type specifier: every clause stays a
+type specifier, and the last one needs no symbol the others do not use. Using it
+in `case` as well gives the two halves one spelling, and it is what
+`translate_pat` already returns for `Pat::Wild`.
 
 ## Control flow
 
@@ -491,6 +571,12 @@ A variable iterated with `across` is not declared, since its type is the
 element type rather than the loop's.
 
 ## Notes
+
+Five of these -- wrapping arithmetic, casts, `rotate_right`, `let _`, and
+constants -- were settled by `rust/random`, whose test asserts a specific number
+and so fails loudly on a masking rule off by one bit rather than passing by
+luck. `doc/lisp-random.md` has the reasoning, the alternatives, and the checks
+against Rust.
 
 * **Output layout.** One self-contained file per crate, `lisp/<name>.lisp`,
   following the Zig backend rather than OCaml's dune tree -- there is no ASDF
@@ -554,95 +640,31 @@ element type rather than the loop's.
   trailing `nil`.
 * **Wrapping arithmetic is `ldb`.** `a.wrapping_mul(b)` is
   `(ldb (byte 64 0) (* a b))` -- the operation on unbounded integers, cut back
-  to the type's width. Checked against Rust rather than reasoned about:
-  `0xFFFFFFFF * 0xFFFFFFFF` masked to 32 bits is `1`, `u64::MAX + 1` masked to
-  64 is `0`, and the first PCG step of `rust/random` agrees to the digit.
-
-  The width is the receiver's, and an unresolvable receiver leaves a marker
-  rather than a guess -- a wrong width is a wrong number, not a compile error.
-  Two things follow. Only *unsigned* receivers translate: `ldb` yields a value's
-  unsigned reading, so a signed one would turn `(-1i32).wrapping_add(0)` into
-  4294967295, which needs sign extension nothing asks for yet. And `usize` is
-  excluded with them, since `int_bits` will not name a width the target decides.
-
-  The receiver's type does not come from SCIP. These methods belong to `core`,
-  and the index carries an occurrence naming `num/impl#[u64]wrapping_mul().`
-  with no `symbol_information` behind it, so there is no signature to read a
-  return type from. It does not need one: a wrapping operation has its
-  receiver's type by definition, and saying so in `expr_ty` is what keeps a
-  *chain* of them typed --
-  `oldstate.wrapping_mul(M).wrapping_add(self.inc)` is one expression whose
-  inner call has to be typed before the outer one can be.
+  to the type's width. The width is the receiver's, taken from `expr_ty` rather
+  than SCIP; only *unsigned* receivers translate, and `usize` or an
+  unresolvable width leaves a marker.
 * **A cast is a mask, or nothing.** Common Lisp integers are unbounded, so the
   two directions are not symmetric: `x as u32` narrowing a `u64` is
   `(ldb (byte 32 0) x)`, and widening a `u8` to `u32` is the operand untouched,
-  the value already *being* that integer. Zig needs a builtin either way
-  (`@truncate` or `@as`), which is what makes this the shorter rule. Both widths
-  must be known, so an unresolvable operand leaves a marker, as does `usize` at
-  either end -- `int_bits` will not name a width the target decides, `fixnum`
-  being 62 bits on this SBCL and 61 on this ECL.
+  the value already *being* that integer. Both widths must be known, so an
+  unresolvable operand leaves a marker, as does `usize` at either end.
 * **`rotate_right` is two shifts.** The one operation with no Common Lisp
   counterpart -- there is `ash`, and no rotate -- so it expands into what it is
-  made of: `(logior (ash x (- n)) (ldb (byte 32 0) (ash x (- 32 n))))`. Only the
-  left shift is masked, since `x >> n` cannot leave the width it started inside.
-  At `n = 0` the left shift carries the value clear of the mask and contributes
-  nothing, leaving `x`. Swept against Rust over eight cases including `0` and
-  `31`, identical on SBCL and ECL.
-
-  The expansion names each operand twice, so it is restricted to operands
-  without effects -- a variable or a field of one, the same admission the Zig
-  backend makes for `translate_wrapping_assign` -- and anything else leaves a
-  marker. A helper `defun` would evaluate once and lift the restriction, at the
-  price of emitting a function the Rust source has no counterpart for; between a
-  duplicated variable and an invented definition, the duplication is the smaller
-  departure.
-
-  Rust reduces the amount modulo the width where this does not, so they part
-  company for `n > width`. `rust/random`'s amount is `oldstate >> 59`, hence
-  0-31 by construction, which is the same reasoning `README.md` records for
-  `wrapping_shl` in the Zig backend.
+  made of: `(logior (ash x (- n)) (ldb (byte 32 0) (ash x (- 32 n))))`. The
+  expansion names each operand twice, so it is restricted to operands without
+  effects, and anything else leaves a marker.
 * **`let _ = e;` is just `e`.** A wildcard binds nothing, so what is left is the
-  expression, evaluated for its effect -- and it has to be kept: `rust/random`
-  discards two `rand_u32()` calls this way, and each one advances the state the
-  next result depends on. Like a tuple pattern it cannot join a `let` group,
-  since there is no name to bind, but unlike one it opens no scope either, so
-  the statements after it stay at the same level rather than nesting:
-
-  ```lisp
-  (let ((rng (make-rand32 :state 0 :inc ...)))
-    (declare (type rand32 rng))
-    (rand32-rand-u32 rng)
-    (setf (rand32-state rng) ...)
-    (rand32-rand-u32 rng)
-    rng)
-  ```
-
-  One edge is unhandled and unexercised: a block whose *last* statement is
-  `let _ = e;` has type `()` in Rust, where this emits `e` and yields its value.
-  A function is safe -- the trailing `nil` above already covers it -- so this
-  could only show up in a block used as a value, which no fixture does.
+  expression, evaluated for its effect, and it has to be kept when that effect
+  is the point. Like a tuple pattern it cannot join a `let` group, since there
+  is no name to bind, but unlike one it opens no scope either, so the statements
+  after it stay at the same level rather than nesting.
 * **Constants are earmuffed.** A `const` becomes a `defconstant`, and an
   associated one takes its type as a prefix the way a method does:
   `Rand32::DEFAULT_INC` is `+rand32-default-inc+`, a top-level `FOOBAR` is
-  `+foobar+`. The earmuffs are the part that matters. A `defconstant` name
-  cannot be bound as a variable on either implementation -- `(let ((c 3)) ...)`
-  signals `SIMPLE-PROGRAM-ERROR` where `c` is one -- so a plain `default-inc`
-  would make that name unusable for every later local, which is
-  [Reserved names](#reserved-names)' trap for `t`, except minted by the
-  translator and once per constant. No translated Rust identifier can contain
-  `+`, so an earmuffed name is disjoint from every name a local can take and the
-  collision cannot arise. Same shape of argument as keywords for a payload-free
-  enum: pick a spelling the rest of the namespace cannot reach.
-
-  No declaration accompanies a constant. The value is a literal the compiler
-  already sees, and a constant cannot be assigned, so there is nothing for one
-  to catch -- unlike a local, where the declaration is the overflow check.
-
-  One limit, not yet reached: `defconstant` requires its value to be `eql` on
-  re-evaluation, so a *string* constant is not safe to load twice. SBCL signals
-  `DEFCONSTANT-UNEQL`, ECL accepts it. Every constant today is an integer, and a
-  translated file is loaded once, so this only matters when `rust/hash` lands --
-  `defparameter` is the spelling for a value that is not `eql`-comparable.
+  `+foobar+`. No declaration accompanies a constant: the value is a literal the
+  compiler already sees, and a constant cannot be assigned, so there is nothing
+  for one to catch -- unlike a local, where the declaration is the overflow
+  check.
 * **Vectors.** `xs[i]` is `(aref xs i)`, `xs.len()` is `(length xs)`, and an
   array literal `[1, 2, 3]` is `#(1 2 3)`.
 * **`Option` is `nil`.** `None` is `nil` and `Some(x)` is `x`, which is
@@ -758,30 +780,12 @@ runs, and why the rest stay off:
 | `shadowing` | no | Common Lisp permits shadowing as Rust does |
 
 `self_type` is the first pass written *for* this backend rather than inherited,
-and the first the Zig backend deliberately declines. Zig has a `Self` of its
-own -- `zig/bitset.zig` emits `fn withCapacity(bits: usize) Self` against a
-`const Self = @This()` -- so resolving the name away would make that output
-worse, where Common Lisp has no such name and must spell the type out
-everywhere.
-
-It is also the pass with the least in it: the impl block carries its own type,
-so no SCIP is consulted, and the rewrite is one ident to another. What makes it
-worth having is where the resolution *was*. Doing it in the translator meant a
-`RefCell<Option<String>>` set and cleared around each `impl`, and a
-`resolve_self` call at each of the seven sites that read a type name -- one per
-path half in `struct_named` and `const_named`, plus `variant_keyword`,
-`method_name`, `const_name`, `translate_call`, and `translate_type`. Every one
-of those was a place to forget, and `Self { .. }` was broken for exactly that
-reason: `struct_named` had been written without it. The pass deletes the state
-and all seven calls, and makes forgetting impossible, because `Self` no longer
-exists by the time emission runs.
-
-The one wrinkle is the span. `README.md`'s discipline is that a synthetic node
-carries a `call_site` span so SCIP can never resolve there; this pass instead
-keeps the original `Self` ident's span. That is the safe direction and the more
-useful one: rust-analyzer records an occurrence of the impl's type at exactly
-that range, so a query there answers with the type the name now spells, where a
-`call_site` span would merely stop answering.
+and the first the Zig backend deliberately declines -- Common Lisp has no `Self`
+and must spell the type out everywhere, where Zig has one of its own to emit. It
+is also the pass with the least in it: the impl block carries its own type, so
+no SCIP is consulted, and the rewrite is one ident to another. Why it is a pass
+rather than the translator lookup it began as, and why it keeps the original
+span instead of a synthetic one, are in `doc/lisp-random.md`.
 
 The passes this tree does not have -- `destructuring`, `try_expression`,
 `type_alias` -- are on the other backends' side and unexamined here;
@@ -799,9 +803,18 @@ The translator covers functions, locals, control flow, arithmetic, indexing,
 `len`, `assert`, structs, enums, methods, and tuples in return position.
 Everything below leaves a `todo` marker rather than disappearing --
 `(todo "expr")` inline, so it is loud, and `;; TODO: mod` at top level, so the
-rest of the file still loads. Seven of the fifteen Rust examples translate
-marker-free.
+rest of the file still loads. Twelve of the sixteen Rust examples translate
+marker-free, and those twelve are exactly the ones with a `lisp/` fixture.
 
+* **A `match` with a `_` arm.** A marker on the keyword side, and a silently
+  toothless `etypecase` on the struct side. Both want the plain `case` /
+  `typecase` with a final `(t ...)` clause; see
+  [Wildcard arms](#wildcard-arms-are-not-implemented).
+* **A binding inside an or-pattern**, and an or-pattern of *literals*. The
+  alternation itself is implemented; see
+  [An or-pattern is one clause](#an-or-pattern-is-one-clause) for why a binding
+  is not. Literals want the same list key, `((1 2) ...)`, but need `Pat::Lit`,
+  which no arm of `translate_pat` handles.
 * **`equalp` as a third equality.** Structs compare by identity under `equal`,
   so `assert_eq!` on a struct answers wrongly. No current example compares two
   structs -- `geometry` compares their fields -- so this has not bitten yet.
@@ -813,13 +826,13 @@ marker-free.
   missing is `match` on a `core` `Option`: it reaches the `etypecase` path,
   finds no variant structs, and leaves a marker. `Result` and `?` have no design
   at all.
-* **Method calls.** Only slice `len` is recognized. `wrapping_*` has a design
-  above (`ldb`) but no code, since the examples that use it -- `rust/hash`,
-  `rust/random` -- need structs and constants first.
+* **Method calls.** Recognized by moniker one at a time: slice `len`, the
+  `wrapping_*` family, and `rotate_right`. Anything else leaves a marker.
 * **Strings and chars.** `design/string.md`'s question reappears: CL strings are
   character vectors, not byte vectors, so `&str` and `&[u8]` cannot share a
   representation the way they do in OCaml.
-* **Slicing, casts, `println!`.** All markers today.
+* **Slicing and `println!`.** Both markers today. Casts are done; see
+  [Notes](#notes).
 * **Drop.** CL is garbage-collected with no destructors; `unwind-protect` is the
   only scope-exit hook. `design/drop.md`'s `defer x.drop()` has no direct
   counterpart.
@@ -829,7 +842,7 @@ marker-free.
 ## Portability
 
 Two implementations run the fixtures: SBCL 2.6.7 and ECL 26.5.5, both wired
-into `test_test.sh`. All seven target files load and pass their own tests on
+into `test_test.sh`. All twelve target files load and pass their own tests on
 both, silently. What differs is not syntax but what a declaration *means*.
 
 ### Declarations are checked on SBCL and ignored on ECL

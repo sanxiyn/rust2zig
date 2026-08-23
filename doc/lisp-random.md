@@ -20,8 +20,8 @@ operators.
 
 ## Constants are earmuffed
 
-`Rand32::DEFAULT_INC` becomes `+rand32-default-inc+` (`const_name`,
-`const_named`). Two decisions in that name.
+`Rand32::DEFAULT_INC` becomes `+rand32-default-inc+`, and a top-level `FOOBAR`
+becomes `+foobar+` (`const_name`, `const_named`). Two decisions in that name.
 
 The type prefix is the rule methods and variants already follow: Common Lisp has
 no per-type namespace, so two types' `MULTIPLIER` have to be told apart at the
@@ -38,7 +38,8 @@ keywords for a payload-free enum: pick a spelling the rest of the namespace
 cannot reach.
 
 No declaration accompanies a constant. The value is a literal the compiler
-already sees and cannot be assigned, so there is nothing for one to catch.
+already sees and cannot be assigned, so there is nothing for one to catch --
+unlike a local, where the declaration is the overflow check.
 
 **Known limit.** `defconstant` requires an `eql` value on re-evaluation, so a
 *string* constant is not safe to load twice: SBCL signals `DEFCONSTANT-UNEQL`,
@@ -52,10 +53,13 @@ and `rust/hash`'s `FOOBAR: &str` is the first that will need it.
 
 It began as the latter: a `RefCell<Option<String>>` set and cleared around each
 `impl`, and a `resolve_self` call at each of the seven sites that read a type
-name. `Self { .. }` was broken because `struct_named` had been written without
-one, and the fix-in-place would have been an eighth call at a place someone
-could forget again. The pass removes the state and every call site, and makes
-forgetting impossible: `Self` no longer exists by the time emission runs.
+name -- one per path half in `struct_named` and `const_named`, plus
+`variant_keyword`, `method_name`, `const_name`, `translate_call`, and
+`translate_type`. Every one was a place to forget, and `Self { .. }` was broken
+because `struct_named` had been written without one; the fix-in-place would have
+been an eighth call at a place someone could forget again. The pass removes the
+state and every call site, and makes forgetting impossible: `Self` no longer
+exists by the time emission runs.
 
 It is a fair desugar by the project's own test -- the rewrite leaves valid Rust,
 and the impl block carries its own type, so no SCIP is consulted.
@@ -80,8 +84,19 @@ way, each advancing the state the asserted number depends on.
 
 The subtlety is what follows it. A tuple pattern also cannot join a `let` group,
 but its `multiple-value-bind` opens a scope, so the remaining statements nest
-inside. A wildcard opens none, so they stay at the same level. Treating the two
-alike would indent the rest of the function once per discarded call.
+inside. A wildcard opens none, so they stay at the same level:
+
+```lisp
+(let ((rng (make-rand32 :state 0 :inc ...)))
+  (declare (type rand32 rng))
+  (rand32-rand-u32 rng)
+  (setf (rand32-state rng) ...)
+  (rand32-rand-u32 rng)
+  rng)
+```
+
+Treating the two alike would indent the rest of the function once per discarded
+call.
 
 **Known limit.** A block whose last statement is `let _ = e;` is `()` in Rust
 but yields `e`'s value here. Functions are covered by the trailing `nil` that
@@ -160,9 +175,9 @@ different report from "I do not know what this is."
 
 `rust/hash` reuses the constants, the `ldb` wrapping, and the narrowing cast
 unchanged. What it still needs is a `match` on a `core` `Option` with guards,
-and `&str` / `as_bytes` -- and the second is a real design question, not a gap:
-Common Lisp strings are character vectors rather than byte vectors, so `&str`
-and `&[u8]` cannot share a representation the way they do in OCaml.
+and `&str` / `as_bytes` -- and the second is a real design question, not a gap,
+for the reason `doc/lisp.md`'s *Not implemented yet* records: Common Lisp
+strings are character vectors rather than byte vectors.
 
 An observation worth keeping: none of these operations needed a new moniker.
 `core::num::wrapping_*`, `rotate_right`, and `as_bytes` were already in
