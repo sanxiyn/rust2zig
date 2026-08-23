@@ -1,6 +1,6 @@
 use crate::ast::zig::Node;
 use crate::translate::name::{camel_to_snake, escape_zig, snake_to_camel};
-use crate::translate::ty::expr_type;
+use crate::translate::ty::{expr_type, is_closure_type};
 use super::{PathMode, Translator, dotted_name};
 
 #[derive(Clone, Copy)]
@@ -77,7 +77,7 @@ impl Translator {
         let syn::Expr::Path(ep) = func else { return node };
         let ident = &ep.path.segments.last().unwrap().ident;
         match self.scip.type_at(&ident.span().into()) {
-            Some(ty) if self.is_closure_type(&ty) => {
+            Some(ty) if is_closure_type(&ty) => {
                 Node::FieldAccess(Box::new(node), "call".to_string())
             }
             _ => node,

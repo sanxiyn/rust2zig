@@ -61,15 +61,6 @@ impl Translator {
         None
     }
 
-    pub fn is_closure_type(&self, ty: &syn::Type) -> bool {
-        let syn::Type::ImplTrait(it) = ty else { return false };
-        it.bounds.iter().any(|bound| {
-            let syn::TypeParamBound::Trait(tb) = bound else { return false };
-            let Some(last) = tb.path.segments.last() else { return false };
-            matches!(last.ident.to_string().as_str(), "Fn" | "FnMut" | "FnOnce")
-        })
-    }
-
     pub fn translate_closure_local(&self, pi: &syn::PatIdent, ec: &syn::ExprClosure) -> Node {
         let name = pi.ident.to_string();
         let captures = self.collect_captures(ec);

@@ -7,6 +7,28 @@ pub fn peel_ref(ty: &syn::Type) -> &syn::Type {
     }
 }
 
+pub fn int_bits(ty: &syn::Type) -> Option<u32> {
+    let syn::Type::Path(tp) = ty else { return None };
+    let segment = tp.path.segments.last()?;
+    match segment.ident.to_string().as_str() {
+        "i8" | "u8" => Some(8),
+        "i16" | "u16" => Some(16),
+        "i32" | "u32" => Some(32),
+        "i64" | "u64" => Some(64),
+        "i128" | "u128" => Some(128),
+        _ => None,
+    }
+}
+
+pub fn is_closure_type(ty: &syn::Type) -> bool {
+    let syn::Type::ImplTrait(it) = ty else { return false };
+    it.bounds.iter().any(|bound| {
+        let syn::TypeParamBound::Trait(tb) = bound else { return false };
+        let Some(last) = tb.path.segments.last() else { return false };
+        matches!(last.ident.to_string().as_str(), "Fn" | "FnMut" | "FnOnce")
+    })
+}
+
 pub fn expr_type(scip: &Scip, expr: &syn::Expr) -> Option<syn::Type> {
     match expr {
         syn::Expr::Binary(eb) => binary_expr_type(scip, eb),

@@ -1,6 +1,6 @@
 use crate::ast::zig::{BLOCK_LABEL, Capture, Node, SwitchArm, SwitchBody, Var};
 use crate::translate::name::camel_to_snake;
-use crate::translate::ty::{expr_type, peel_ref};
+use crate::translate::ty::{expr_type, int_bits, peel_ref};
 use super::{PathMode, Translator};
 use super::call::Wrapping;
 use super::pat::Accessor;
@@ -446,19 +446,6 @@ fn int_literal(li: &syn::LitInt) -> String {
     match text.strip_suffix(li.suffix()) {
         Some(text) => text.to_string(),
         None => text,
-    }
-}
-
-fn int_bits(ty: &syn::Type) -> Option<u32> {
-    let syn::Type::Path(tp) = ty else { return None };
-    let segment = tp.path.segments.last()?;
-    match segment.ident.to_string().as_str() {
-        "i8" | "u8" => Some(8),
-        "i16" | "u16" => Some(16),
-        "i32" | "u32" => Some(32),
-        "i64" | "u64" => Some(64),
-        "i128" | "u128" => Some(128),
-        _ => None,
     }
 }
 
