@@ -16,6 +16,9 @@ impl Translator {
             if matches!(self.path_mode(&ep.path), PathMode::EnumVariant) {
                 return self.translate_call_constructor(ec, &ep.path);
             }
+            if self.check_moniker(&ep.path, "core::cell::Cell::new") {
+                return self.translate_expr(&ec.args[0]);
+            }
             if self.check_moniker(&ep.path, "core::option::Option::Some") {
                 return self.translate_expr(&ec.args[0]);
             }
@@ -24,9 +27,6 @@ impl Translator {
             }
             if self.check_moniker(&ep.path, "core::result::Result::Err") {
                 return self.translate_err(&ec.args[0]);
-            }
-            if self.check_moniker(&ep.path, "core::cell::Cell::new") {
-                return self.translate_expr(&ec.args[0]);
             }
             if self.check_moniker(&ep.path, "core::mem::drop") {
                 let arg = self.translate_expr(&ec.args[0]);

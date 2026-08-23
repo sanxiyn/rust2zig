@@ -339,9 +339,10 @@ impl Printer {
         self.out.push_str(&format!("switch ({}) {{\n", self.expr(cond)));
         self.indent();
         for arm in arms {
-            let pattern = match &arm.pattern {
-                Some(pattern) => self.expr(pattern),
-                None => "else".to_string(),
+            let pattern = if !arm.pattern.is_empty() {
+                arm.pattern.iter().map(|item| self.expr(item)).collect::<Vec<_>>().join(", ")
+            } else {
+                "else".to_string()
             };
             self.out.push_str(&format!("{}{} => ", self.pad(), pattern));
             if let Some(capture) = &arm.capture {
