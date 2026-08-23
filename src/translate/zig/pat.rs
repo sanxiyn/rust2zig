@@ -22,20 +22,20 @@ impl Translator {
         }
     }
 
-    pub fn translate_match_pat(&self, pat: &syn::Pat) -> (Option<Node>, Vec<Capture>) {
+    pub fn translate_match_pat(&self, pat: &syn::Pat) -> (Vec<Node>, Vec<Capture>) {
         match pat {
             syn::Pat::Ident(pi) if pi.subpat.is_none() => {
                 if self.scip.kind_at(&pi.ident.span().into()) == Some(Kind::EnumMember) {
                     let path = syn::Path::from(pi.ident.clone());
                     let node = self.translate_path(&path, PathMode::EnumVariant);
-                    return (Some(node), Default::default());
+                    return (vec![node], Default::default());
                 }
                 let capture = Capture {
                     name: pi.ident.to_string(),
                     accessor: Accessor::Whole,
                     by_ref: pi.by_ref.is_some(),
                 };
-                (None, vec![capture])
+                (vec![], vec![capture])
             }
             syn::Pat::Lit(pl) => {
                 let node = match &pl.lit {
@@ -44,11 +44,22 @@ impl Translator {
                     syn::Lit::Str(s) => Node::StringLiteral(s.value()),
                     _ => Node::Todo("match lit".to_string()),
                 };
-                (Some(node), Default::default())
+                (vec![node], Default::default())
+            }
+            syn::Pat::Or(po) => {
+                let mut nodes = vec![];
+                for case in &po.cases {
+                    let (node, captures) = self.translate_match_pat(case);
+                    if !captures.is_empty() {
+                        return (vec![Node::Todo("match or".to_string())], Default::default());
+                    }
+                    nodes.extend(node);
+                }
+                (nodes, Default::default())
             }
             syn::Pat::Path(pp) => {
                 let node = self.translate_path(&pp.path, PathMode::EnumVariant);
-                (Some(node), Default::default())
+                (vec![node], Default::default())
             }
             syn::Pat::Struct(ps) => {
                 let node = self.translate_path(&ps.path, PathMode::EnumVariant);
@@ -64,7 +75,7 @@ impl Translator {
                         }
                     }
                 }
-                (Some(node), captures)
+                (vec![node], captures)
             }
             syn::Pat::TupleStruct(pts) => {
                 let node = self.translate_path(&pts.path, PathMode::EnumVariant);
@@ -78,12 +89,12 @@ impl Translator {
                         });
                     }
                 }
-                (Some(node), captures)
+                (vec![node], captures)
             }
-            syn::Pat::Wild(_) => (None, Default::default()),
+            syn::Pat::Wild(_) => (vec![], Default::default()),
             _ => {
                 let node = Node::Todo("match pat".to_string());
-                (Some(node), Default::default())
+                (vec![node], Default::default())
             }
         }
     }

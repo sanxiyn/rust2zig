@@ -1,0 +1,16 @@
+Explore the project and give me a summary.
+We will review documentation today. First: there is fair bit of duplication between doc/lisp.md and doc/lisp-random.md. Delete duplication in doc/lisp.md and augment doc/lisp-random.md as necessary if it has something that is missing.
+Payload-free half of enum is also implemented. doc/lisp.md seems stale about it.
+An example used for payload-free enum seems stale. It used to be a color example, but now we have direction example.
+It seems fine now, but go over doc/lisp.md again in case we missed something, for similar outdatedness.
+This is not correct. Then we wrote PLAN.md again. It's on another machine. Sorry about that.
+It probably should be verbatim (ie in one line).
+I think we should make it more clear match with wildcard arm is unimplemented and we plan to use case/typecase there instead of ecase/etypecase. Should we spell it otherwise or t, which is more idiomatic?
+I think e in ecase and etypecase stands for error, not exhaustiveness. It is related, but I find the current wording misleading.
+I don't think CLHS example talk is right either. You can use either spelling. Literal t is written (t), but it's same for otherwise: literal otherwise is written (otherwise).
+Do we handle or patterns? 1 | 2 is naturally (1 2) case. If not, briefly note in Not implemented yet section.
+That sounds like a good example. Let's add vertical(Direction) -> bool to direction, and test_vertical. Let's rename test_direction to test_opposite as well.
+I think we should have a separate section for pattern matching below structs and enums, and move or pattern and wildcard pattern there.
+How do you think things are going so far?
+/insights
+/exit
