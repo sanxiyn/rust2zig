@@ -4,7 +4,7 @@ How Rust's `&str` and `&[u8]` should be represented in the OCaml backend.
 **Implemented** in `src/translate/ml/string.rs`, with `rust/hash` / `ml/hash` as
 the golden pair. Driven by `rust/hash` — the Test section of
 `design/integer.md` left this as the open design question. The OCaml snippets
-here are verified against OCaml 5.4.1.
+here are verified against OCaml 5.5.0.
 
 Unlike `design/integer.md` this is not an OCaml-only concern; the Zig backend
 answered it first, and the answer is worth reading before choosing a different
@@ -113,7 +113,7 @@ it is unaffected by the representation choice.
 
 ## Worked example: `rust/hash`
 
-Verified to produce `0xbf9cf968` for `"foobar"` under OCaml 5.4.1. This is
+Verified to produce `0xbf9cf968` for `"foobar"` under OCaml 5.5.0. This is
 `design/integer.md`'s worked example with the four operations above applied.
 
 ```ocaml

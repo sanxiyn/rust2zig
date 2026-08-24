@@ -5,7 +5,7 @@ recursion. **Level 1 implemented** in `src/translate/ml/order.rs`, with the
 components from `petgraph` ([a decided addition](#the-algorithm-petgraph) to
 `[dependencies]`). Driven by `rust/random`, whose `impl` block defines its
 methods in the order they are used rather than the order OCaml needs. The OCaml
-snippets here are verified against OCaml 5.4.1.
+snippets here are verified against OCaml 5.5.0.
 
 This is an OCaml-only concern. Zig's top-level declarations are order
 independent, so the Zig backend emits items in source order and never has to

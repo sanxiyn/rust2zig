@@ -5,7 +5,7 @@ backend. **Levels 1 and 2 implemented** in `src/translate/ml/int.rs`; there is
 no golden fixture yet, because `rust/hash` is blocked on two gaps that have
 nothing to do with integers (see [Test](#test)). Driven by `rust/hash`, whose
 FNV-1a needs multiplication modulo 2^32, which 63-bit `int` cannot express. The
-OCaml snippets here are verified against OCaml 5.4.1.
+OCaml snippets here are verified against OCaml 5.5.0.
 
 This is an OCaml-only concern. Zig has the Rust widths natively, so the whole
 question is about a target whose native integer is neither 32 nor 64 bits wide.
@@ -206,7 +206,7 @@ today, so the re-spelling is a fallback rather than the normal path.
 ## Worked example: `rust/hash`
 
 The target output, verified to produce `0xbf9cf968` for `"foobar"` under OCaml
-5.4.1. `u32` is escalated (`wrapping_mul`); `usize` and `u8` are not.
+5.5.0. `u32` is escalated (`wrapping_mul`); `usize` and `u8` are not.
 
 ```ocaml
 let fnv_offset_basis_32 = 0x811c9dc5l

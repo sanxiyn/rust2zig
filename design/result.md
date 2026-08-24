@@ -3,7 +3,7 @@
 Status and roadmap for translating Rust's `Result<T, E>` and the `?` operator.
 **Zig: level 1 implemented**, levels 2 and 3 are not. **OCaml: implemented**,
 except for a `?` in a conditionally-evaluated position. The emitted output is
-verified against Zig 0.16.0 and OCaml 5.4.1. Driven by `rust/regex`, whose parse
+verified against Zig 0.16.0 and OCaml 5.5.0. Driven by `rust/regex`, whose parse
 methods return `Result<T> = core::result::Result<T, Error>` and propagate with
 `?`.
 
@@ -73,7 +73,8 @@ name.
   must be resolved to discover `E = Error` before any of this can fire. The
   alias is a dependency of the feature, not a co-benefit of it. It is now the
   `type_alias` desugar pass, shared by both backends, so `Result<T>` reaches
-  the translator already expanded to `Result<T, Error>`. See `design/type.md`.
+  the translator already expanded to `Result<T, Error>`. See
+  `design/type_alias.md`.
 * **`Expr::Try` is two translations, not one.** Rust's `?` also applies to
   `Option`, where the Zig is `orelse return null` rather than `try`. Which one
   it is turned out not to need the operand's type at all: rust-analyzer records
@@ -185,7 +186,7 @@ the Zig side — needs nothing special here at all.
 
 The type mapping and both constructors are nearly free: `translate_type` already
 lowers a path type with its arguments in order, so `(int, error) result` falls
-out once the alias is expanded (`design/type.md`), and `Ok` already crosses over
+out once the alias is expanded (`design/type_alias.md`), and `Ok` already crosses over
 unchanged. Only `Err` needs renaming, to OCaml's `Error`.
 
 ### `?` is a binding operator
@@ -242,7 +243,7 @@ and the honest failure is a visible marker rather than a reordered effect.
 
 ### Prerequisites
 
-* **Type aliases**, done — see `design/type.md`. This was the change that turned
+* **Type aliases**, done — see `design/type_alias.md`. This was the change that turned
   OCaml's wrong-arity `int result` into `(int, error) result`.
 * **Core enum members in patterns.** `Translator::is_variant` in the OCaml
   backend asks `Scip::kind_at`, but an external symbol like
@@ -281,7 +282,7 @@ let eval_or a b c default =
 
 ## OCaml facts
 
-Verified against OCaml 5.4.1, by running the snippets.
+Verified against OCaml 5.5.0, by running the snippets.
 
 | # | Case | Result |
 |---|------|--------|
