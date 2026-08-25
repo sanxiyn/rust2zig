@@ -76,6 +76,7 @@ The decision materializes in four operations:
 | `"foobar"` | `"foobar"` | `translate_lit`, a new `syn::Lit::Str` arm |
 | `s.as_bytes()` | identity, dropped | `translate_method_call`, by SCIP moniker |
 | `bytes.len()` | `String.length bytes` | `translate_method_call`, type-directed |
+| `s.len()` | `String.length s` | `translate_method_call`, by moniker |
 | `bytes[i]` | `Char.code bytes.[i]` | `translate_index`, type-directed |
 
 The first two are additions. The last two were unconditional (`Array.length`,
@@ -88,6 +89,15 @@ and no existing output moves.
 Note that `.len()` keeps its SCIP moniker gate and gains the type dispatch
 *inside* it, rather than replacing it: the moniker establishes that this is a
 slice `len` at all, and the receiver type then picks the module.
+
+There are in fact two monikers, because `str` has its own inherent `len` —
+`str/impl#[str]len().`, not `slice/impl#[`[T]`]len().` — and only the slice one
+was gated at first, so `s.len()` on a `&str` fell through to a generic method
+call and emitted `len s`. `rust/hash` never showed this: it calls `.len()` only
+on `&[u8]`, having already gone through `as_bytes`. Where the receiver is a
+`str` the moniker settles the module by itself and no type lookup is needed; the
+receiver type is still consulted for the slice moniker, where `&[u8]` and every
+other slice have to be told apart.
 
 `ArrayGet` gained a sibling `StringGet` in `ast/ml.rs`, printing `s.[i]` at the
 same precedence.
@@ -166,16 +176,25 @@ uses `char`, `.chars()`, and `len_utf8`, none of which this design addresses,
 and choosing `string` for `&str` does not commit us on any of them — an OCaml
 `string` is a byte string whether or not we ever decode it.
 
-Zig has not solved this either: there is no `zig/regex.zig` golden. That both
-backends are stuck at the same place suggests it is a problem about Rust's
-`char`, not about either target, and it should get its own design rather than
-being folded in here.
+It now has its own design: **`design/char.md`**, which answers `Uchar.t`. The
+two documents meet at exactly one place and need no conversion there —
+`String.get_utf_8_uchar : string -> int -> Uchar.utf_decode` consumes the
+`string` chosen here directly, so `.chars().next()` and `len_utf8` both fall out
+of the standard library.
+
+This paragraph previously added that Zig has not solved `char` either — there is
+still no `zig/regex.zig` golden — and inferred that the shared stuckness pointed
+at a problem in Rust's `char` rather than in either target. **That inference was
+wrong.** OCaml has an exact answer whose only cost is syntactic, so the two
+backends were stuck for unrelated reasons, and Zig's answer has to be argued on
+Zig's own terms. See `design/char.md`'s "Zig is a separate question".
 
 ## Test
 
 | Path | Role |
 |------|------|
 | `rust/hash`, `ml/hash` | golden pair |
+| `rust/string`, `ml/string` | `design/char.md`'s golden pair, and where `str::len` was found missing from the moniker table above |
 
 `rust/hash` is the fixture for this, and it is the fixture for
 `design/integer.md` too. It emits with no `TODO` left, and `test_test.sh hash`

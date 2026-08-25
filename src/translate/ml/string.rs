@@ -27,4 +27,27 @@ impl Translator {
         let get = Expression::StringGet(Box::new(base), Box::new(index));
         Expression::Apply(Box::new(qualified("Char", "code")), vec![get])
     }
+
+    pub fn translate_char_at(&self, emc: &syn::ExprMethodCall) -> Option<Expression> {
+        if !self.check_moniker_ident(&emc.method, "core::option::Option::unwrap") {
+            return None;
+        }
+        let syn::Expr::MethodCall(next) = &*emc.receiver else { return None };
+        if !self.check_moniker_ident(&next.method, "core::str::Chars::next") {
+            return None;
+        }
+        let syn::Expr::MethodCall(chars) = &*next.receiver else { return None };
+        if !self.check_moniker_ident(&chars.method, "core::str::chars") {
+            return None;
+        }
+        let syn::Expr::Index(index) = &*chars.receiver else { return None };
+        let syn::Expr::Range(range) = &*index.index else { return None };
+        let (Some(start), None) = (&range.start, &range.end) else { return None };
+        let base = self.translate_expr(&index.expr);
+        let offset = self.translate_expr(start);
+        let get = qualified("String", "get_utf_8_uchar");
+        let decode = Expression::Apply(Box::new(get), vec![base, offset]);
+        let uchar = qualified("Uchar", "utf_decode_uchar");
+        Some(Expression::Apply(Box::new(uchar), vec![decode]))
+    }
 }
