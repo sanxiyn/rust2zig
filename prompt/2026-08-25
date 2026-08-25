@@ -1,0 +1,22 @@
+Explore the project and give me a summary.
+Common Lisp backend advanced considerably (on another machine). Update PLAN.md.
+Read design/flow.md and implement loop for Zig.
+Let's have unimagniatvely named test operator, and test_not testing both integer and boolean !.
+design/operator.md was written without access to OCaml backend. Check.
+Implement loop for OCaml.
+Use std.meta.eql when appropriate for Zig.
+Change geometry's test_translate to compare with q = Point { x: 4, y: 6 }.
+Let's think about char for OCaml. It should be Uchar.t, right?
+Write design/char.md and update design/string.md.
+/compact
+On pattern matching using guard, I think we could use = instead of Uchar.equal.
+Write a small, self-contained, and pared down version of regex's string and char handling as unimaginatively named test string to drive support in OCaml backend.
+What is the exact problem with span and how should we fix it?
+Implement it.
+Map str::len to String.length.
+Implement character literal for OCaml.
+Implement char::len_utf8.
+Implement UTF decoding matching.
+How do you think things are going so far?
+/insights
+/exit

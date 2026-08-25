@@ -133,6 +133,36 @@ impl Scip {
     }
 }
 
+fn char_columns(source: &str) -> Vec<Vec<u32>> {
+    let mut tables = vec![];
+    for line in source.lines() {
+        if line.is_ascii() {
+            tables.push(vec![]);
+            continue;
+        }
+        let mut table = Vec::with_capacity(line.len() + 1);
+        let mut i = 0;
+        for c in line.chars() {
+            for _ in 0..c.len_utf8() {
+                table.push(i);
+            }
+            i += 1;
+        }
+        table.push(i + 1);
+        tables.push(table);
+    }
+    tables
+}
+
+fn char_column(columns: &[Vec<u32>], line: u32, column: u32) -> u32 {
+    let Some(table) = columns.get(line as usize) else { return column };
+    if table.is_empty() {
+        return column;
+    }
+    let index = (column as usize).min(table.len() - 1);
+    table[index]
+}
+
 fn decode_range(range: &[i32]) -> Option<Range> {
     let (sl, sc, el, ec) = match range {
         [sl, sc, ec] => (*sl, *sc, *sl, *ec),
@@ -157,8 +187,13 @@ pub fn load(package_dir: &Path) -> Scip {
     let mut symbols: HashMap<String, SymbolInfo> = Default::default();
 
     for document in &index.documents {
+        let source = fs::read_to_string(package_dir.join(&document.relative_path))
+            .expect("failed to read source file");
+        let columns = char_columns(&source);
         for occurrence in &document.occurrences {
-            let Some(range) = decode_range(&occurrence.range) else { continue };
+            let Some(mut range) = decode_range(&occurrence.range) else { continue };
+            range.start_character = char_column(&columns, range.start_line, range.start_character);
+            range.end_character = char_column(&columns, range.end_line, range.end_character);
             if occurrence.symbol.is_empty() {
                 continue;
             }
