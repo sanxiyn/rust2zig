@@ -1,0 +1,16 @@
+Explore the project and give me a summary.
+Today we will work on OCaml backend. Let's start with a newly added test, operator.
+Now let's do direction.
+What is missing for random? Read research/random.md.
+Now try regex. What is missing?
+Let's start with Box erasure.
+Please briefly explain what test you intend to add.
+Nat test looks good to me. Proceed. Name it nat though.
+/compact
+What should we do for Vec for OCaml? Dynarray?
+Write design/vec.md.
+Why not Dynarray.equal for equality?
+Let's create a test. Let's test loop as well. Test name collatz, collatz(3) is [3, 10, 5, 16, 8, 4, 2, 1].
+How do you think things are going so far?
+/insights
+/exit
