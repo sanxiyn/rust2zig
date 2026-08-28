@@ -1,5 +1,5 @@
 use crate::ast::ml::{Constant, Expression};
-use super::{apply, Translator};
+use super::{apply, qualified, unit, Translator};
 
 fn failwith(message: &str) -> Expression {
     let message = Expression::Constant(Constant::String(message.to_string()));
@@ -14,6 +14,8 @@ impl Translator {
             Some(self.translate_assert_eq(mac))
         } else if self.check_moniker(&mac.path, "std::macros::panic") {
             self.translate_panic(mac)
+        } else if self.check_moniker(&mac.path, "alloc::macros::vec") {
+            self.translate_vec(mac)
         } else {
             None
         }
@@ -37,6 +39,14 @@ impl Translator {
         }
         let message: syn::LitStr = syn::parse2(mac.tokens.clone()).ok()?;
         Some(failwith(&message.value()))
+    }
+
+    fn translate_vec(&self, mac: &syn::Macro) -> Option<Expression> {
+        if !mac.tokens.is_empty() {
+            return None;
+        }
+        let create = qualified("Dynarray", "create");
+        Some(Expression::Apply(Box::new(create), vec![unit()]))
     }
 
     fn translate_macro_args(&self, mac: &syn::Macro) -> Vec<Expression> {

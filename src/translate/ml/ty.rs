@@ -1,6 +1,7 @@
 use crate::ast::ml::{CoreType, Longident};
 use crate::scip::Kind;
 use crate::translate::name::{camel_to_snake, escape_ml};
+use crate::translate::ty::type_argument;
 use super::integer::is_integer_type;
 use super::string::is_string_type;
 use super::Translator;
@@ -13,14 +14,23 @@ impl Translator {
         match ty {
             syn::Type::Path(tp) => {
                 let segment = tp.path.segments.last().unwrap();
+                if self.check_moniker(&tp.path, "alloc::boxed::Box") {
+                    if let Some(inner) = type_argument(segment) {
+                        return self.translate_type(inner);
+                    }
+                }
                 let ident = &segment.ident;
                 let name = ident.to_string();
                 if self.scip.kind_at(&ident.span().into()) == Some(Kind::TypeParameter) {
                     return CoreType::Var(name.to_lowercase());
                 }
-                let name = match self.type_module(ident) {
-                    Some(module) => self.qualify(Some(module), "t".to_string()),
-                    None => Longident::Lident(self.map_type_name(&name)),
+                let name = if self.check_moniker(&tp.path, "alloc::vec::Vec") {
+                    Longident::Ldot(Box::new(Longident::Lident("Dynarray".to_string())), "t".to_string())
+                } else {
+                    match self.type_module(ident) {
+                        Some(module) => self.qualify(Some(module), "t".to_string()),
+                        None => Longident::Lident(self.map_type_name(&name)),
+                    }
                 };
                 let mut type_args = vec![];
                 if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
