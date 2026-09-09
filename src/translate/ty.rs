@@ -1,5 +1,11 @@
 use crate::scip::Scip;
 
+pub fn type_argument(segment: &syn::PathSegment) -> Option<&syn::Type> {
+    let syn::PathArguments::AngleBracketed(args) = &segment.arguments else { return None };
+    let syn::GenericArgument::Type(ty) = args.args.first()? else { return None };
+    Some(ty)
+}
+
 pub fn peel_ref(ty: &syn::Type) -> &syn::Type {
     match ty {
         syn::Type::Reference(tr) => peel_ref(&tr.elem),

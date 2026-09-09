@@ -1,4 +1,5 @@
 use crate::ast::zig::Node;
+use crate::translate::ty::type_argument;
 use super::{Translator, todo};
 
 impl Translator {
@@ -96,15 +97,55 @@ impl Translator {
             syn::ReturnType::Type(_, ty) => self.translate_type(ty),
         }
     }
+
+    pub fn use_meta_eql(&self, ty: &syn::Type) -> bool {
+        self.is_aggregate(ty) && self.is_pointer_free(ty, 0)
+    }
+
+    fn is_aggregate(&self, ty: &syn::Type) -> bool {
+        match ty {
+            syn::Type::Array(_) => true,
+            syn::Type::Path(tp) => {
+                let name = tp.path.segments.last().unwrap().ident.to_string();
+                self.aggregates.contains_key(&name)
+            }
+            _ => false,
+        }
+    }
+
+    fn is_pointer_free(&self, ty: &syn::Type, depth: usize) -> bool {
+        const MAX_DEPTH: usize = 8;
+        if depth > MAX_DEPTH {
+            return false;
+        }
+        match ty {
+            syn::Type::Array(ta) => self.is_pointer_free(&ta.elem, depth + 1),
+            syn::Type::Path(tp) => {
+                let segment = tp.path.segments.last().unwrap();
+                let name = segment.ident.to_string();
+                match name.as_str() {
+                    "bool"
+                    | "i8" | "i16" | "i32" | "i64" | "i128" | "isize"
+                    | "u8" | "u16" | "u32" | "u64" | "u128" | "usize" => true,
+                    "Option" => match type_argument(segment) {
+                        Some(inner_ty) => self.is_pointer_free(inner_ty, depth + 1),
+                        None => false,
+                    },
+                    _ if self.plain_enums.contains(&name) => true,
+                    _ => match self.aggregates.get(&name) {
+                        Some(aggregate) => aggregate.fields.iter()
+                            .all(|f| self.is_pointer_free(f, depth + 1)),
+                        None => false,
+                    },
+                }
+            }
+            syn::Type::Tuple(tt) => tt.elems.iter().all(|e| self.is_pointer_free(e, depth + 1)),
+            _ => false,
+        }
+    }
 }
 
 fn is_str(ty: &syn::Type) -> bool {
     let syn::Type::Path(tp) = ty else { return false };
     tp.path.is_ident("str")
-}
-
-fn type_argument(segment: &syn::PathSegment) -> Option<&syn::Type> {
-    let syn::PathArguments::AngleBracketed(args) = &segment.arguments else { return None };
-    let syn::GenericArgument::Type(ty) = args.args.first()? else { return None };
-    Some(ty)
 }

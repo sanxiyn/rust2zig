@@ -2,9 +2,10 @@
 
 How Rust's `==` and `!=` are translated. **Common Lisp: implemented** in
 `src/translate/lisp/equality.rs`, as a three-way type-driven choice. **Zig:
-scalars only** -- `==` is emitted verbatim, and an aggregate comparison is a Zig
-compile error rather than a wrong answer. **OCaml: implemented**, and needed no
-design, because one polymorphic `=` covers every case Rust can present.
+scalars, plus `std.meta.eql` for pointer-free aggregates** (level 2 below); an
+aggregate the walk cannot clear keeps `==` and stays a compile error rather
+than a wrong answer. **OCaml: implemented**, and needed no design, because one
+polymorphic `=` covers every case Rust can present.
 
 Unlike most documents here this one is not driven by a single fixture. It is
 retrospective: the rule was arrived at while `lisp/direction.lisp` and
@@ -46,23 +47,27 @@ backends would notice if it did.
 | integers | contents | `==` | `=` | `=` |
 | `&str` / `String` | contents | **compile error** | `equal` | `=` |
 | `char` | contents | **no Zig type yet** | `equal` | `=` |
-| arrays, slices, `Vec` | contents | **compile error** | `equalp` | `=` |
-| structs | field-wise | **compile error** | `equalp` | `=` |
+| arrays | contents | `std.meta.eql` | `equalp` | `=` |
+| slices, `Vec` | contents | **compile error** | `equalp` | `=` |
+| structs | field-wise | `std.meta.eql` if pointer-free, else **compile error** | `equalp` | `=` |
 | payload-free enum | by variant | `==` | `equal` | `=` |
-| data-carrying enum | variant + payload | **compile error** | `equalp` | `=` |
+| data-carrying enum | variant + payload | `std.meta.eql` if pointer-free, else **compile error** | `equalp` | `=` |
 | `Option<T>` | contents | `==` if `T` is scalar, else **compile error** | `equal` | `=` |
-| `!=` | `!=` | `!=` | `/=` or `(not ...)` | `<>` |
-| type-driven? | -- | no | **yes** | no |
+| `!=` | `!=` | `!=`, or `!std.meta.eql(...)` | `/=` or `(not ...)` | `<>` |
+| type-driven? | -- | **partly** | **yes** | no |
 
 The three targets sit at three points on one spectrum. **Zig refuses** to
-compare anything structured, so the translator can be untyped and still never
-be wrong -- it just cannot express half the table. **OCaml accepts
+compare anything structured with `==`, so the translator was able to be untyped
+and still never wrong -- it just could not express half the table, and
+expressing it is what made this backend type-driven at all. **OCaml accepts
 everything** through one polymorphic `=`, so the translator can be untyped and
 also complete. **Common Lisp accepts everything too, under three different
-predicates that disagree**, so it is the only backend that has to choose, and
-the only one where choosing wrong is a silent wrong answer.
+predicates that disagree**, so it is the one backend that has to choose between
+predicates, and the one where choosing wrong is a silent wrong answer.
 
-That is why this document is mostly about Common Lisp.
+That is why this document is mostly about Common Lisp. Zig's choice is a
+narrower one -- not *which* equality, but whether the type is one
+`std.meta.eql` answers correctly at all.
 
 ## Common Lisp: three predicates, chosen by type
 
@@ -205,16 +210,39 @@ right and is not.
   reached the day `Result` is encoded.
 * **Floats**, row 12 above.
 
-## Zig: `==` is scalars, and everything else is a compile error
+## Zig: `==` for scalars, `std.meta.eql` for pointer-free aggregates
 
-`translate_binary` emits `Node::EqualEqual` unconditionally
-(`src/translate/zig/expr.rs:124`); nothing about equality is type-driven.
-`assert_eq!` becomes `try std.testing.expectEqual(left, right)`
-(`src/translate/zig/mac.rs:25`).
+`translate_binary` asks `translate_aggregate_eq` first. When the operand type
+resolves to an aggregate Zig's `==` rejects -- an array, a crate struct, a
+data-carrying enum -- *and* that type is transitively free of slices and
+pointers, `a == b` becomes `std.meta.eql(a, b)` and `a != b` becomes
+`!std.meta.eql(a, b)`. Everything else falls through to `Node::EqualEqual` as
+before. `assert_eq!` is untouched and still becomes
+`try std.testing.expectEqual(left, right)` (`src/translate/zig/mac.rs:25`),
+which already recursed through aggregates on its own (fact 10).
 
-That is complete for every fixture -- `zig/*.zig` compares only integers,
-booleans, payload-free enums, optionals, and error values -- and it stops dead
-at the first aggregate.
+The type walk is `use_meta_eql` in `src/translate/zig/ty.rs`. It needs the
+field types of every crate struct and enum, which `analyze` now records in
+`aggregates`, keyed by **type name** rather than by SCIP symbol: the types it
+is looked up with come from `expr_type`, which parses a rendered signature and
+so produces synthetic spans that resolve to no symbol. That is the same
+name-for-symbol substitution `doc/ml.md`'s `expr_module` makes, with the same
+exposure -- two same-named types in one crate -- and `PLAN.md` lists it as
+stopgap for the same reason.
+
+**The pointer-free condition is the whole of the correctness argument.**
+`std.meta.eql` compares a slice by pointer and length, so on a type with a
+`&str` or `&[T]` field it answers false for equal contents -- fact 11's failure,
+reached by a different route. Refusing those types keeps them on `==`, where
+they remain a compile error. Verified: a struct with a `&'static str` field
+still emits `x.* == y.*` and Zig rejects it with
+`operator == not allowed for type 'Named'`.
+
+One caveat on that loudness, which applies to this whole document's "compile
+error, not a wrong answer" claim: **Zig analyses lazily**, so an uncalled
+function's body is never checked. The refused comparison is a compile error
+only where the code is actually reached, which for fixtures means reached by a
+test. It is `test_test.sh` that turns the guarantee into an observed one.
 
 ### Zig facts
 
@@ -253,14 +281,16 @@ drop-in fix (fact 12).
 ### Levels
 
 * **Level 1 (implemented).** `==` and `!=` verbatim; correct for integers,
-  `bool`, payload-free enums, and optionals. Everything else is a compile
-  error, `char` included -- it has no Zig type yet at all
-  (`design/string.md`).
-* **Level 2: `std.meta.eql` for pointer-free aggregates.** Structs, arrays, and
-  tagged unions whose fields transitively contain no slice or pointer. Needs
-  exactly the type walk `int_bits` and `expr_type` already do, plus the
-  reachability check. `assert_eq!` on such a type needs nothing -- fact 10
-  already covers it.
+  `bool`, payload-free enums, and optionals. `char` is still out -- it has no
+  Zig type yet at all (`design/string.md`).
+* **Level 2 (implemented).** `std.meta.eql` for structs, arrays, and tagged
+  unions whose fields transitively contain no slice or pointer.
+  `zig/geometry.zig` pins it. One gap remains inside the level: an operand
+  whose type does not resolve keeps `==`. The reachable case is a **generic**
+  operand -- `lisp/iter.lisp`'s `*e == v` compares two values of an erased `T`,
+  and the Zig backend has the same expression with no type to walk, so it stays
+  `==`. That is correct today only because `rust/iter` instantiates `T` at
+  `i32`.
 * **Level 3: a generated `eql` method.** For a type that does contain a slice,
   `std.meta.eql` is wrong the same way `expectEqual` is (fact 11), so the type
   gets `pub fn eql(self: Self, other: Self) bool` comparing field-wise with
@@ -321,30 +351,40 @@ translated.
 | `lisp/iter.lisp` | The erased `T` (`equal`) beside a length comparison (`=`), in one function -- the pair that shows the choice is per-operand-type and not per-file |
 | `lisp/direction.lisp` | `equal` on keywords, the payload-free enum encoding; nothing else in the fixture |
 | `lisp/div.lisp` | `equal` on an erased `Option` in `assert_eq!`, including `(equal nil (div 7 3))` for `None` |
-| `lisp/geometry.lisp` | Structs, compared field-wise via `=` on the readers -- so it does *not* exercise `equalp` |
+| `lisp/geometry.lisp` | Structs, compared field-wise via `=` on the readers -- so it does *not* exercise `equalp`. **Stale**: see the note below |
+| `zig/geometry.zig` | `test "translate"` compares two `Point`s both ways in one test -- `std.debug.assert(std.meta.eql(p, q))` from `==`, and `expectEqual(q, p)` from `assert_eq!` -- which is what pins level 2 and keeps the two paths visibly distinct |
 | `zig/direction.zig`, `zig/div.zig`, `zig/calc.zig` | `expectEqual` on enums, optionals, and error unions |
 | `ml/*/test/test.ml` | `assert (… = …)` on ints, options, and results |
 
-**No fixture emits `equalp` at all.** `Sort::Aggregate` is reached only by an
-array, slice, `Vec`, struct, or data-carrying enum appearing as an operand of
-`==` or `assert_eq!`, and no example does that yet -- `lisp/geometry.lisp`
-compares the fields rather than the structs. The aggregate half of the Common
-Lisp rule, the case-folding leak, and every Zig level above 1 are all waiting on
-the same missing fixture: one that compares two structs.
+**That missing struct-comparison fixture is now `rust/geometry`.** Its
+`test_translate` builds a second `Point { x: 4, y: 6 }` and compares the whole
+struct instead of asserting on `p.x` and `p.y` separately, which is what
+exercises level 2.
 
-The cheapest one is a `Point` equality test in `rust/geometry`
-(`assert_eq!(Point::new(1, 2), p)`), which would emit `equalp` on the Lisp side
-and a compile error on the Zig side, exposing both at once. A fixture that
-exposes the *leak* needs a struct with a string field, which no current example
-has.
+**`lisp/geometry.lisp` was not regenerated with it**, because the Common Lisp
+translator is not in this checkout. The golden still contains the old
+field-wise `(assert (= 4 (point-x p)))` form, so it keeps loading and passing
+under `test_test.sh` -- which runs the `.lisp` file directly -- while no longer
+matching what the translator would now emit from its own source.
+`test_lisp.sh` will flag it the day both are present in one tree, and the row
+above describes a file that is a snapshot rather than current output.
+
+Regenerating it is also the moment the Lisp side of this document gets its
+first `equalp`: `Sort::Aggregate` is reached by exactly this comparison, and
+**no fixture emits `equalp` today**. A fixture that exposes the case-folding
+*leak* still needs a struct with a string field, which no current example has.
 
 ## Not implemented yet
 
-1. Zig levels 2 and 3, and `expectEqualDeep` for slice-bearing types.
-2. The Common Lisp aggregate leak fix -- generated predicates or a `rust-equal`
+1. Zig level 3, and `expectEqualDeep` for slice-bearing types. Both are the
+   same missing piece seen twice: a slice-bearing aggregate has no working
+   equality on the Zig side at all today, under `==` or `assert_eq!`.
+2. Regenerating `lisp/geometry.lisp` against its changed source, which is also
+   the tree's first `equalp`.
+3. The Common Lisp aggregate leak fix -- generated predicates or a `rust-equal`
    helper.
-3. Peeling `Option` and `Result` payloads when sorting, in Common Lisp.
-4. Floats anywhere, including the NaN row.
+4. Peeling `Option` and `Result` payloads when sorting, in Common Lisp.
+5. Floats anywhere, including the NaN row.
 
 ## Not planned
 

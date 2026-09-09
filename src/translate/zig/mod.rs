@@ -37,9 +37,15 @@ pub struct Enum {
     pub impls: Vec<syn::ItemImpl>,
 }
 
+pub struct Aggregate {
+    pub fields: Vec<syn::Type>,
+}
+
 pub struct Translator {
     pub structs: HashMap<String, Struct>,
     pub enums: HashMap<String, Enum>,
+    pub aggregates: HashMap<String, Aggregate>,
+    pub plain_enums: HashSet<String>,
     pub generic_fns: HashMap<String, GenericFn>,
     pub error_types: HashSet<String>,
     pub error_scope: RefCell<Option<String>>,
@@ -56,6 +62,8 @@ impl Translator {
         Translator {
             structs: Default::default(),
             enums: Default::default(),
+            aggregates: Default::default(),
+            plain_enums: Default::default(),
             generic_fns: Default::default(),
             error_types: Default::default(),
             error_scope: Default::default(),
@@ -90,6 +98,14 @@ impl Translator {
                     let Some(symbol) = self.scip.symbol_at(&e.ident.span().into()) else { continue };
                     let symbol = symbol.to_string();
                     let has_data = e.variants.iter().any(|v| !v.fields.is_empty());
+                    if has_data {
+                        let fields = e.variants.iter()
+                            .flat_map(|v| v.fields.iter().map(|f| f.ty.clone()))
+                            .collect();
+                        self.aggregates.insert(e.ident.to_string(), Aggregate { fields });
+                    } else {
+                        self.plain_enums.insert(e.ident.to_string());
+                    }
                     self.enums.insert(symbol, Enum { has_data, impls: Default::default() });
                 }
                 syn::Item::Fn(f) => {
@@ -99,6 +115,10 @@ impl Translator {
                     let Some(symbol) = self.scip.symbol_at(&s.ident.span().into()) else { continue };
                     let symbol = symbol.to_string();
                     let has_fields = !s.fields.is_empty();
+                    if has_fields {
+                        let fields = s.fields.iter().map(|f| f.ty.clone()).collect();
+                        self.aggregates.insert(s.ident.to_string(), Aggregate { fields });
+                    }
                     self.structs.insert(symbol, Struct { has_fields, impls: Default::default() });
                 }
                 _ => {}

@@ -1,7 +1,7 @@
 use crate::ast::zig::{BLOCK_LABEL, Capture, Node, SwitchArm, SwitchBody, Var};
 use crate::translate::name::camel_to_snake;
 use crate::translate::ty::{expr_type, int_bits, peel_ref};
-use super::{PathMode, Translator};
+use super::{PathMode, Translator, dotted_name};
 use super::call::Wrapping;
 use super::pat::Accessor;
 
@@ -104,6 +104,9 @@ impl Translator {
                 vec![left, right],
             );
         }
+        if let Some(node) = self.translate_aggregate_eq(eb) {
+            return node;
+        }
         let left = Box::new(self.translate_expr(&eb.left));
         let right = Box::new(match eb.op {
             syn::BinOp::Shl(_) | syn::BinOp::Shr(_) => self.shift_amount(&eb.right),
@@ -138,6 +141,37 @@ impl Translator {
             syn::BinOp::SubAssign(_) => Node::AssignSub(left, right),
             _ => Node::Todo("binop".to_string()),
         }
+    }
+
+    fn translate_aggregate_eq(&self, eb: &syn::ExprBinary) -> Option<Node> {
+        if !matches!(eb.op, syn::BinOp::Eq(_) | syn::BinOp::Ne(_)) {
+            return None;
+        }
+        let ty = self.operand_type(&eb.left)
+            .or_else(|| self.operand_type(&eb.right))?;
+        if !self.use_meta_eql(peel_ref(&ty)) {
+            return None;
+        }
+        let left = self.translate_expr(&eb.left);
+        let right = self.translate_expr(&eb.right);
+        let call = Node::Call(
+            Box::new(dotted_name("std.meta.eql")),
+            vec![left, right],
+        );
+        if matches!(eb.op, syn::BinOp::Ne(_)) {
+            return Some(Node::BoolNot(Box::new(call)));
+        }
+        Some(call)
+    }
+
+    fn operand_type(&self, expr: &syn::Expr) -> Option<syn::Type> {
+        if let syn::Expr::Unary(eu) = expr {
+            if matches!(eu.op, syn::UnOp::Deref(_)) {
+                let ty = expr_type(&self.scip, &eu.expr)?;
+                return Some(peel_ref(&ty).clone());
+            }
+        }
+        expr_type(&self.scip, expr)
     }
 
     pub fn shift_amount(&self, expr: &syn::Expr) -> Node {
