@@ -210,6 +210,18 @@ impl Translator {
         })
     }
 
+    pub fn translate_loop(&self, el: &syn::ExprLoop) -> Node {
+        if el.label.is_some() {
+            return todo("loop");
+        }
+        let cond = Node::Identifier("true".to_string());
+        let body = self.translate_block(&el.body);
+        Node::While {
+            cond: Box::new(cond),
+            body: Box::new(body),
+        }
+    }
+
     pub fn translate_while(&self, ew: &syn::ExprWhile) -> Node {
         let cond = self.translate_expr(&ew.cond);
         let body = self.translate_block(&ew.body);

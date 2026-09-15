@@ -1,9 +1,9 @@
 # Control flow
 
 How `if`, `while`, `loop`, `for`, and the non-local exits (`break`, `continue`,
-`return`) are translated. **`if`, `while`, `for`, and all three exits are
-implemented in every backend.** Rust's `loop` is implemented in Common Lisp
-only. Labels and `break` with a value are implemented nowhere.
+`return`) are translated. **`if`, `while`, `loop`, `for`, and all three exits
+are implemented in every backend.** Labels and `break` with a value are
+implemented nowhere.
 
 `match` is `design/match.md`, `if let` is `design/option.md`, `?` is
 `design/result.md`, and what an early exit does to a live droppable value is
@@ -59,9 +59,9 @@ takes its body directly rather than needing a `progn`. OCaml emits
 
 | Rust | Zig | Common Lisp | OCaml |
 |---|---|---|---|
-| `while c { … }` | `while (c) { … }` | `(loop while c do …)` | `while c do … done` |
-| `loop { … }` | **unhandled** | `(loop do …)` | -- |
-| `while let …` | marker | marker | marker |
+| `while c { ... }` | `while (c) { ... }` | `(loop while c do ...)` | `while c do ... done` |
+| `loop { ... }` | `while (true) { ... }` | `(loop do ...)` | `while true do ... done` |
+| `while let ...` | marker | marker | marker |
 
 Common Lisp's `loop` is emitted in the *extended* form (`(loop do …)`) rather
 than the simple one, so that the implicit `nil` block exists and `(return)` --
@@ -69,12 +69,46 @@ which is how `break` translates -- has something to return from. Verified: a
 clause-free `(loop do …)` with a `(return i)` inside works on both
 implementations.
 
-Rust's `loop` has **no arm in the Zig backend at all**: `syn::Expr::Loop` is
-absent from `translate_expr`, so it falls to the `todo("expr")` catch-all. The
-translation is `while (true)`, and it is a one-line addition. It matters because
-`rust/regex`'s parser is written around a `loop`, and because the README's note
-that "labels and break-with-value are TODO and only relevant once `loop` lands"
-is this gap seen from the other end.
+Zig's `loop` reuses `Node::While` with `true` as the condition, so it needs no
+node of its own and no printer change. A labeled `loop` still emits a marker,
+like a labeled `break`.
+
+What made it more than the one-line addition it looked like is **tail
+position**. Rust's `loop` types as `!`, so a function whose body ends in one --
+exiting only by `return` from inside, which is how `rust/regex`'s parser is
+written -- puts a `loop` where `translate_stmt` applies its implicit return.
+Wrapping it would emit `return /* TODO: expr */;` and drop the entire loop body,
+since `Node::While` has no expression form in `print::zig`. So `loop` joins `if`
+in `is_statement_like`, the set of tail expressions the implicit return skips
+-- `if` because the `return` is pushed into its branches, the loops because
+there is no value to return at all. `while` and `for` were in the same latent
+hole and are now excluded too, though no fixture ever reached it: every existing
+fixture ends in a value (`total`, `a`, `None`) rather than in a loop.
+
+**OCaml pays for the same `!` in a different currency.** `while true do ... done`
+is the loop, but OCaml's `while` is `unit` where Rust's `loop` is `!`, and a
+`loop` is precisely the construct that leaves by an exit rather than by falling
+off the end. So `translate_loop` splits on whether the body breaks:
+
+| Rust | OCaml | type |
+|---|---|---|
+| `loop { ... break ... }` | `try while true do ... done with Exit -> ()` | `unit` |
+| `loop { ... return v ... }` | `while true do ... done; assert false` | `'a` |
+
+The second is the interesting one. With no `break`, the loop is left only by a
+`Return` exception or never, so the `while` is genuinely unreachable-past --
+and `assert false` is OCaml's spelling of `!`, typing as `'a` so a
+tail-position `loop` unifies with whatever the function returns. Without it,
+`try (while ... done) with Return r -> r` is a type error: `unit` body against an
+`int` handler. Verified, parentheses included -- the printer emits
+`assert (false)` and the polymorphic typing survives, which the `digits` case
+proves by returning `int`.
+
+This also closed a **latent bug in `while`**. `translate_while` never called
+`wrap_break`, so a `while` containing a `break` emitted `raise Exit` with no
+handler and would have escaped the function at runtime. No fixture had that
+combination -- `rust/gcd`'s `while` has no `break` -- so nothing caught it. Both
+loops now route through the same wrapper.
 
 `while let` is unhandled everywhere for one reason: `syn::Expr::Let` in
 condition position reaches the expression dispatcher and lands on its catch-all.
@@ -191,16 +225,14 @@ the reason the drop analysis stops where it does.
 
 ## The holes, ranked
 
-1. **Rust `loop` in Zig.** No arm; the translation is `while (true)`; `regex`
-   needs it.
-2. **OCaml `continue` only as a top-of-body guard.** Anything else needs an
+1. **OCaml `continue` only as a top-of-body guard.** Anything else needs an
    exception. Unexercised -- `ml/sum`'s is a guard -- so it is a latent
    restriction rather than a visible failure, and it should become a marker
    before it becomes a wrong answer.
-3. **Labels and `break` with a value**, everywhere; cheapest in Common Lisp,
+2. **Labels and `break` with a value**, everywhere; cheapest in Common Lisp,
    blocked in Zig on unique block labels.
-4. **`while let`**, everywhere; native in Zig, free in Common Lisp.
-5. **Iterator chains.** The five recognized shapes cover the fixtures and
+3. **`while let`**, everywhere; native in Zig, free in Common Lisp.
+4. **Iterator chains.** The five recognized shapes cover the fixtures and
    nothing beyond them. A general answer needs an iterator protocol per target
    -- `doc/scheme.md` reaches the same conclusion for a fourth backend and
    proposes SRFI-158 generators, which is the only place in the tree where the
@@ -217,17 +249,26 @@ the reason the drop analysis stops where it does.
 | `rust/geometry`, `rust/div` | Tail-position `if`, with the return pushed into the branches |
 | `rust/regex` | Unfixtured; the `loop`, and the only iterator chain in the tree |
 
+**`loop` itself is unfixtured, in both backends that implement it.** It is
+verified against a two-function scratch crate -- a `loop` with a `break` in
+non-tail position, and a tail-position `loop` exiting by `return` -- which is
+what forced Zig's `is_statement_like` change and OCaml's `assert false`, and
+which passes under `cargo test`, `zig test`, and `dune runtest` alike. But
+nothing in `rust/` pins it, so no golden file would catch a regression.
+Fixturing it needs a name: `loop` is a Rust keyword and Cargo rejects it as a
+package name. The same scratch crate covers `while` + `break`, the latent bug
+above, which is equally unpinned.
+
 No fixture has a labeled loop, a `break` with a value, a `while let`, or a
 `continue` anywhere but the top of a body. The first three are markers today;
 the fourth is the one that would be silently wrong, and only in OCaml.
 
 ## Not implemented yet
 
-1. `loop` in the Zig backend.
-2. Labels and `break` with a value.
-3. `while let`.
-4. `continue` from a non-guard position in OCaml.
-5. Iterator chains beyond the five shapes.
+1. Labels and `break` with a value.
+2. `while let`.
+3. `continue` from a non-guard position in OCaml.
+4. Iterator chains beyond the five shapes.
 
 ## Not planned
 

@@ -27,6 +27,7 @@ impl Translator {
             syn::Expr::If(ei) => self.translate_if(ei),
             syn::Expr::Index(ei) => self.translate_index(ei),
             syn::Expr::Lit(el) => self.translate_lit(el),
+            syn::Expr::Loop(el) => self.translate_loop(el),
             syn::Expr::Macro(em) => self.translate_macro(&em.mac)
                 .unwrap_or_else(|| Node::Todo("macro".to_string())),
             syn::Expr::Match(em) => self.translate_match(em),

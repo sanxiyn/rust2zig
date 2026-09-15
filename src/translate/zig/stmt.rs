@@ -1,6 +1,13 @@
 use crate::ast::zig::{Node, Var};
 use super::Translator;
 
+fn is_statement_like(expr: &syn::Expr) -> bool {
+    matches!(
+        expr,
+        syn::Expr::ForLoop(_) | syn::Expr::If(_) | syn::Expr::Loop(_) | syn::Expr::While(_)
+    )
+}
+
 impl Translator {
     fn translate_stmt(&self, stmt: &syn::Stmt, is_last: bool) -> Vec<Node> {
         match stmt {
@@ -15,7 +22,7 @@ impl Translator {
                     return nodes;
                 }
                 let mut nodes = self.prelude_clear_flags(expr);
-                if is_last && semi.is_none() && !matches!(expr, syn::Expr::If(_)) {
+                if is_last && semi.is_none() && !is_statement_like(expr) {
                     let expr = self.translate_expr(expr);
                     nodes.push(Node::Return(Some(Box::new(expr))));
                 } else {
