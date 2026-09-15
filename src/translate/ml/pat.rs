@@ -1,7 +1,7 @@
 use crate::ast::ml::{ClosedFlag, Constant, Longident, Pattern};
 use crate::translate::name::escape_ml;
 use super::Translator;
-use super::integer::{literal_digits, IntRepr};
+use super::integer::{IntRepr, literal_digits};
 
 impl Translator {
     pub fn translate_pat(&self, pat: &syn::Pat) -> Pattern {

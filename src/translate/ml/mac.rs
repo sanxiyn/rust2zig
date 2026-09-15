@@ -1,10 +1,5 @@
 use crate::ast::ml::{Constant, Expression};
-use super::{apply, qualified, unit, Translator};
-
-fn failwith(message: &str) -> Expression {
-    let message = Expression::Constant(Constant::String(message.to_string()));
-    apply("failwith", vec![message])
-}
+use super::{Translator, apply, qualified, unit};
 
 impl Translator {
     pub fn translate_macro(&self, mac: &syn::Macro) -> Option<Expression> {
@@ -61,4 +56,9 @@ impl Translator {
         }
         args
     }
+}
+
+fn failwith(message: &str) -> Expression {
+    let message = Expression::Constant(Constant::String(message.to_string()));
+    apply("failwith", vec![message])
 }

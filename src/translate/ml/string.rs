@@ -1,6 +1,6 @@
 use crate::ast::ml::Expression;
 use crate::translate::ty::{expr_type, peel_ref};
-use super::{qualified, Translator};
+use super::{Translator, qualified};
 
 pub fn is_string_type(ty: &syn::Type) -> bool {
     match peel_ref(ty) {

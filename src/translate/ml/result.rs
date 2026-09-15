@@ -1,7 +1,7 @@
 use syn::visit::Visit;
 
 use crate::ast::ml::{BindingOp, Expression, Pattern, RecFlag, ValueBinding};
-use super::{qualified, Translator};
+use super::{Translator, qualified};
 
 const LET_OP: &str = "let*";
 
