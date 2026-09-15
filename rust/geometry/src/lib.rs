@@ -1,3 +1,4 @@
+#[derive(Debug, PartialEq)]
 pub struct Point {
     pub x: i32,
     pub y: i32,
@@ -36,8 +37,9 @@ pub fn bounding_box(s: &Shape) -> (i32, i32, i32, i32) {
 fn test_translate() {
     let mut p = Point { x: 1, y: 2 };
     p.translate(3, 4);
-    assert_eq!(4, p.x);
-    assert_eq!(6, p.y);
+    let q = Point { x: 4, y: 6 };
+    assert!(p == q);
+    assert_eq!(q, p);
 }
 
 #[test]

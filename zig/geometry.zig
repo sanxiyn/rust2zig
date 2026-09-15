@@ -53,8 +53,9 @@ fn boundingBox(s: *const Shape) struct { i32, i32, i32, i32 } {
 test "translate" {
     var p: Point = Point{ .x = 1, .y = 2 };
     p.translate(3, 4);
-    try std.testing.expectEqual(4, p.x);
-    try std.testing.expectEqual(6, p.y);
+    const q: Point = Point{ .x = 4, .y = 6 };
+    std.debug.assert(std.meta.eql(p, q));
+    try std.testing.expectEqual(q, p);
 }
 
 test "bounding_box_dot" {
