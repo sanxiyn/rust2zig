@@ -52,6 +52,13 @@ pub fn expr_type(scip: &Scip, expr: &syn::Expr) -> Option<syn::Type> {
             scip.return_type_at(&ident.span().into())
         }
         syn::Expr::Cast(ec) => Some((*ec.ty).clone()),
+        syn::Expr::Field(ef) => {
+            let span = match &ef.member {
+                syn::Member::Named(ident) => ident.span(),
+                syn::Member::Unnamed(index) => index.span,
+            };
+            scip.type_at(&span.into())
+        }
         syn::Expr::Index(ei) => match peel_ref(&expr_type(scip, &ei.expr)?) {
             syn::Type::Array(ta) => Some((*ta.elem).clone()),
             syn::Type::Slice(ts) => Some((*ts.elem).clone()),
