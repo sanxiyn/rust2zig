@@ -124,10 +124,18 @@ impl Translator {
     }
 
     pub fn translate_block_with_preamble(&self, block: &syn::Block, preamble: Vec<Node>) -> Node {
+        self.block_node(block, preamble, true)
+    }
+
+    pub fn translate_loop_body(&self, block: &syn::Block, preamble: Vec<Node>) -> Node {
+        self.block_node(block, preamble, false)
+    }
+
+    fn block_node(&self, block: &syn::Block, preamble: Vec<Node>, implicit_return: bool) -> Node {
         let mut stmts = preamble;
         let count = block.stmts.len();
         for (i, stmt) in block.stmts.iter().enumerate() {
-            let is_last = i + 1 == count;
+            let is_last = implicit_return && i + 1 == count;
             stmts.extend(self.translate_stmt(stmt, is_last));
         }
         Node::Block(stmts)

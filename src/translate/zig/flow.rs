@@ -38,7 +38,7 @@ impl Translator {
         let iterable = self.translate_expr(&efl.expr);
         let name = self.pat_name(&efl.pat);
         let capture = Capture { name, by_ref };
-        let body = self.translate_block(&efl.body);
+        let body = self.translate_loop_body(&efl.body, Default::default());
         Node::For {
             iterables: vec![iterable],
             captures: vec![capture],
@@ -60,7 +60,7 @@ impl Translator {
         let counter_name = self.pat_name(&pt.elems[0]);
         let capture = Capture { name, by_ref };
         let counter_capture = Capture { name: counter_name, by_ref: false };
-        let body = self.translate_block(&efl.body);
+        let body = self.translate_loop_body(&efl.body, Default::default());
         Node::For {
             iterables: vec![iterable, counter],
             captures: vec![capture, counter_capture],
@@ -105,7 +105,7 @@ impl Translator {
         };
         let iterable = Node::ForRange(Box::new(start), Some(Box::new(end)));
         let capture = Capture { name: format!("_{name}"), by_ref: false };
-        let body = self.translate_block_with_preamble(&efl.body, vec![preamble]);
+        let body = self.translate_loop_body(&efl.body, vec![preamble]);
         Node::For {
             iterables: vec![iterable],
             captures: vec![capture],
@@ -132,7 +132,7 @@ impl Translator {
             let capture = Capture { name, by_ref };
             captures.push(capture);
         }
-        let body = self.translate_block(&efl.body);
+        let body = self.translate_loop_body(&efl.body, Default::default());
         Node::For {
             iterables,
             captures,
@@ -215,7 +215,7 @@ impl Translator {
             return todo("loop");
         }
         let cond = Node::Identifier("true".to_string());
-        let body = self.translate_block(&el.body);
+        let body = self.translate_loop_body(&el.body, Default::default());
         Node::While {
             cond: Box::new(cond),
             body: Box::new(body),
@@ -224,7 +224,7 @@ impl Translator {
 
     pub fn translate_while(&self, ew: &syn::ExprWhile) -> Node {
         let cond = self.translate_expr(&ew.cond);
-        let body = self.translate_block(&ew.body);
+        let body = self.translate_loop_body(&ew.body, Default::default());
         Node::While {
             cond: Box::new(cond),
             body: Box::new(body),
