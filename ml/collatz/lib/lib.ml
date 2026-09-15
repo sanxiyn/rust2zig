@@ -5,12 +5,11 @@ let collatz start =
         while true do
             Dynarray.add_last steps !n;
             if !n = 1 then
-                raise Exit
-            else
-                if !n mod 2 = 0 then
-                    n := !n / 2
-                else
-                    n := 3 * !n + 1
+                raise Exit;
+            match !n mod 2 with
+            | 0 -> n := !n / 2
+            | 1 -> n := 3 * !n + 1
+            | _ -> failwith "unreachable"
         done
     with Exit -> ());
     steps

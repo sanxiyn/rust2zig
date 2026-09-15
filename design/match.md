@@ -60,9 +60,9 @@ the holes are.
 |---|---|---|---|
 | variant, no payload | prong `.north` | `:north` key / struct type | constructor |
 | variant with ident bindings | prong capture + accessors | slot readers + `declare` | constructor pattern |
-| literal | prong key | `case` key | **silently `_`** (loud, see below) |
+| literal | prong key | `case` key | constant pattern |
 | `_` | `else` prong | `t` clause, dropping the `e` form | `_` |
-| or-pattern, no bindings | `.a, .b =>` | key list, or `(or ...)` type | native (unexercised) |
+| or-pattern, no bindings | `.a, .b =>` | key list, or `(or ...)` type | `p \| p` |
 | or-pattern with bindings | marker | marker | native (unexercised) |
 | nested pattern | **silently flattened away** | **silently flattened away** | native |
 | guard | **silently dropped** (except `Option`) | marker | `when` (unexercised) |
@@ -168,9 +168,50 @@ translator is unsafe here and the pipeline is safe; `test_test.sh` is what
 closes it. That is worth stating plainly because it is *not* a property of the
 translator and it will not survive being run outside dune's dev profile.
 
-The one pattern class this actually bites is literals: `ml/pat.rs` has no
-`syn::Pat::Lit` arm, so `match n { 0 => a, _ => b }` collapses to two `_` arms.
-No `ml/` fixture contains a literal pattern, so nothing exercises it today.
+Or-patterns were the case that proved this, and they are how the mechanism was
+actually observed rather than merely argued. `ml/pat.rs` had no `syn::Pat::Or`
+arm, so `rust/direction`'s `vertical` translated to two `_` arms -- and the
+table above claimed OCaml handled the feature natively, which was true of the
+target and not of the translator. The claim went unchallenged only because
+`ml/direction` did not exist; the moment it did, the fixture emitted the pattern
+and warning 11 was waiting. `Pattern::Or` is now a real node.
+
+Literals were the next instance, and they went the same way. `ml/pat.rs` had no
+`syn::Pat::Lit` arm, so `match n { 0 => a, _ => b }` collapsed to two `_` arms
+-- and again the claim went unchallenged only because no `ml/` fixture had a
+literal pattern. `rust/collatz` now matches `n % 2` against `0`, `1`, and `_`,
+and warning 11 was waiting exactly as before. The arm emits `Pattern::Constant`.
+
+The digits go through `literal_digits` at `IntRepr::Int`, which keeps the source
+spelling and strips only a Rust type suffix. A scrutinee whose repr is a boxed
+`Int32`/`Int64` would need that repr threaded into the pattern, since the
+literal beside it would have to be escalated the same way an expression operand
+is (`design/integer.md`); no fixture asks for it yet. Bool and string literals
+map directly; `char` cannot, because `design/char.md` makes a Rust `char` an
+OCaml `Uchar.t` and `Uchar.of_char 'a'` is a function call, not a constant
+pattern. Those still fall through to the silent `_`.
+
+### Patterns get the same precedence treatment expressions have
+
+`design/operator.md` records that `src/print/ml.rs` is the one printer that
+computes parentheses, because OCaml's expression precedences genuinely disagree
+with Rust's. Adding `Pattern::Or` extends that to patterns, for a sharper
+reason: an or-pattern binds *looser* than everything else a pattern can
+contain, and the mistake it invites is silent rather than a syntax error.
+
+* `Some (A | B)` printed bare is `Some A | B`, which is a different, legal
+  pattern.
+* `(A | B, C)` printed bare is `A | (B, C)`, because `,` binds tighter than
+  `|` in an OCaml pattern -- the opposite of the reading Rust gives the same
+  characters.
+
+So `pattern` takes a context and `pattern_prec` returns a binding level, on a
+three-rung ladder (`PAT_OR` < `PAT_APP` < `PAT_ATOM`) rather than the
+expression printer's ten. A constructor argument and a function parameter ask
+for `PAT_ATOM`; a tuple element and a record field ask for `PAT_APP`; a match
+arm and a `let` binding ask for nothing. The nested-constructor case
+(`Some (Some x)`, previously `Some Some x`) falls out of the same ladder,
+which is the second bug this fixed and the one no fixture had reached.
 
 ## Where the desugar pass sits
 
@@ -310,20 +351,22 @@ So the roadmap is one item, not three:
 * **Level 3.** The `&mut` capture mutability, which is independent of both.
 
 OCaml needs none of this. Guards are `when`, nested patterns are patterns, and
-the only OCaml-side work is the missing `Pat::Lit` arm -- which is a literal
-mapped to a constant pattern, not a lowering.
+the one piece of OCaml-side work there was -- the missing `Pat::Lit` arm -- was
+a literal mapped to a constant pattern rather than a lowering, and it has
+landed.
 
 ## Test
 
 | Path | Role |
 |------|------|
-| `rust/direction`, `zig/direction.zig`, `lisp/direction.lisp` | Payload-free enum: `switch` on an enum with `.north` prongs, and `ecase` over keywords. Its `vertical` is the or-pattern fixture in both -- `.north, .south =>` and `((:north :south) t)` |
+| `rust/direction`, `zig/direction.zig`, `ml/direction`, `lisp/direction.lisp` | Payload-free enum: `switch` on an enum with `.north` prongs, an OCaml variant type, and `ecase` over keywords. Its `vertical` is the or-pattern fixture in all three -- `.north, .south =>`, `Direction.North \| Direction.South`, and `((:north :south) t)` |
 | `rust/geometry`, `zig/geometry.zig`, `lisp/geometry.lisp` | Data-carrying enum: tuple and struct variants, `&self` scrutinee through `match_ergonomics`, `by_ref` captures (`\|*p\|`, `&_circle.center`), and the `etypecase` with `declare`d slot readers |
 | `rust/option`, `zig/option.zig`, `lisp/option.lisp` | A crate-defined `Option` that the moniker check keeps on the switch path rather than the optional path |
 | `rust/calc` | The `core` `Result` match (`Ok(value)` / `Err(_)`), which becomes `if (r) \|v\| … else \|e\|` |
 | `rust/hash` | The `core` `Option` match, and the only guard in any fixture -- both on the same arm (`Some(v) if 0 < v && …`), which is why the general-path guard hole has never been hit. `zig/hash.zig` is where the labeled if-chain is visible |
 | `rust/div` | `if let Some`, the other half of the `Option` story, in both backends |
-| `rust/regex` | Unfixtured, and the source of the pressure: literal patterns (`0`/`1`/`_` on a `Vec` length), a `char` scrutinee, and a bare-binding arm |
+| `rust/collatz`, `ml/collatz` | The literal-pattern fixture: `0`/`1`/`_` on `n % 2`, with `_ => panic!("unreachable")`. In Zig it is also the only `switch` in statement position rather than behind a `return` |
+| `rust/regex` | Unfixtured, and the source of the pressure: it is where the literal patterns came from, and it still has a `char` scrutinee and a bare-binding arm |
 
 No fixture has a nested pattern, an or-pattern with bindings, a `while let`, a
 tuple scrutinee, or a guard outside the `Option` path. Every hole in this

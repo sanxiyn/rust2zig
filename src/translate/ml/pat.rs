@@ -1,6 +1,7 @@
-use crate::ast::ml::{ClosedFlag, Longident, Pattern};
+use crate::ast::ml::{ClosedFlag, Constant, Longident, Pattern};
 use crate::translate::name::escape_ml;
 use super::Translator;
+use super::integer::{literal_digits, IntRepr};
 
 impl Translator {
     pub fn translate_pat(&self, pat: &syn::Pat) -> Pattern {
@@ -9,6 +10,19 @@ impl Translator {
                 Pattern::Construct(self.variant_name(&syn::Path::from(pi.ident.clone())), None)
             }
             syn::Pat::Ident(pi) => Pattern::Var(escape_ml(&pi.ident.to_string())),
+            syn::Pat::Lit(pl) => match &pl.lit {
+                syn::Lit::Bool(b) => {
+                    Pattern::Construct(Longident::Lident(b.value.to_string()), None)
+                }
+                syn::Lit::Int(li) => {
+                    Pattern::Constant(Constant::Integer(literal_digits(li, IntRepr::Int), None))
+                }
+                syn::Lit::Str(s) => Pattern::Constant(Constant::String(s.value())),
+                _ => Pattern::Var("_".to_string()),
+            },
+            syn::Pat::Or(po) => {
+                Pattern::Or(po.cases.iter().map(|case| self.translate_pat(case)).collect())
+            }
             syn::Pat::Path(pp) if self.is_variant(&pp.path) => {
                 Pattern::Construct(self.variant_name(&pp.path), None)
             }

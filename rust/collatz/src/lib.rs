@@ -6,10 +6,10 @@ pub fn collatz(start: u32) -> Vec<u32> {
         if n == 1 {
             break;
         }
-        if n % 2 == 0 {
-            n = n / 2;
-        } else {
-            n = 3 * n + 1;
+        match n % 2 {
+            0 => n = n / 2,
+            1 => n = 3 * n + 1,
+            _ => panic!("unreachable"),
         }
     }
     steps
