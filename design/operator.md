@@ -52,14 +52,14 @@ below is a different way of asking the same question.
 | `a >> b` | `a >> @intCast(b)` | `(ash a (- b))` | `asr` / `lsr` by signedness |
 | `a && b`, `a \|\| b` | `and`, `or` | `(and …)`, `(or …)` | `&&`, `\|\|` |
 | `!b` (bool) | `!b` | `(not b)` | `not b` |
-| `!x` (integer) | **unhandled** | `(lognot x)` | `lnot x` (unverified) |
+| `!x` (integer) | `~x` | `(lognot x)` | `lnot x`, masked when narrow |
 | `-x` | `-x` | `(- x)` | `-x` |
 | `a += b` | `a += b` | `(incf a b)`, else `setf` | `compound_assignment` pass |
 | `a.wrapping_add(b)` | `a +% b` | `(ldb (byte N 0) (+ a b))` | `Int32.add` after escalation |
-| `a.rotate_right(n)` | `std.math.rotr(T, a, n)` | shift pair | -- |
+| `a.rotate_right(n)` | `std.math.rotr(T, a, n)` | shift pair | shift pair, masked |
 
-Two entries in that table are gaps rather than translations; both are in the
-[holes](#the-holes-ranked).
+One entry in that table is a gap rather than a translation: signed `/` in Zig,
+the first of the [holes](#the-holes-ranked).
 
 ## Division and remainder are three different problems
 
@@ -108,9 +108,46 @@ silently wrong, and no backend does anything special about it.
 
 Rust's `!` is **two operators sharing a token**: logical negation on `bool` and
 bitwise complement on integers. Common Lisp's `translate_unary` asks
-`expr_type` and emits `not` or `lognot` accordingly. The Zig backend does not
-ask: it always emits `Node::BoolNot`, so `!x` on an integer produces
-`expected type 'bool', found 'u8'`. Zig's spelling is `~`.
+`expr_type` and emits `not` or `lognot` accordingly. The Zig backend now asks
+the same question and emits `~` (`Node::BitNot`) or `!` (`Node::BoolNot`); so
+does the OCaml backend, emitting `lnot` or `not`. `rust/operator`'s `test_not`
+pins both halves in all three.
+
+The type test is `is_int`, which is deliberately *not* `int_bits`. `int_bits`
+answers a width and so declines `usize` / `isize` on purpose (`design/integer.md`
+-- an index's width is the target's); here the size types are integers like any
+other, so the two questions need two predicates.
+
+An operand whose type does not resolve stays `!`. That is the same
+make-it-loud choice `translate_cast` makes by leaving an unresolvable narrowing
+cast as `@as`: on an integer, `!` is a Zig compile error rather than a silent
+wrong answer. OCaml gets the same property for free from the other direction --
+`not` is `bool -> bool`, so an unresolved integer operand is a type error at
+`dune build` rather than a wrong value.
+
+### OCaml is the one target where `!` is not just a spelling
+
+Zig and Common Lisp complement the value and stop. OCaml cannot, because
+`design/integer.md` stores a narrow unsigned type in a *wider* representation:
+`u8` lives in a 63-bit `int`, so `lnot 0x0f` is `-16` where Rust's `!0x0fu8` is
+`0xf0`. The spare bits get complemented too, and they have to go back to zero.
+
+So the rule in `translate_int_not` is the same one `translate_int_cast`
+already applies to a narrowing cast, and it reuses the same `mask`:
+
+* **signed, any width** -- `lnot x`. `!x` is `-x - 1` on a signed type, which is
+  in range at every width, so nothing needs fixing up.
+* **unsigned, width equal to the representation's** (`u64` as `Int64`, an
+  escalated `u32` as `Int32`) -- `Int64.lognot x` / `Int32.lognot x`. Every bit
+  of the representation is a bit of the Rust value.
+* **unsigned, narrower than the representation** (`u8`, `u16`, an unescalated
+  `u32`) -- `lnot x land 0xff`, and so on by width.
+* **`usize`** -- `(* TODO: lnot *)`. `integer_width` has no answer for it, so
+  there is no width to mask back down to, and the marker is the honest output.
+
+This is the second place the escalation rule's cost shows up as a fixup rather
+than a representation change, which is the pattern to expect from the
+`saturating_` / `checked_` families below.
 
 ## Compound assignment
 
@@ -260,12 +297,12 @@ if the helper is a function call, and it rules out the tempting rewrite of
 | `rust/random` | `wrapping_add`, `wrapping_mul`, `rotate_right`, and shifts by non-literal amounts (the `@intCast` path); its assertion pins an exact PCG output, so a wrong wrap fails loudly |
 | `rust/bitset` | `&`, `\|`, `^`, `<<`, and the `x & (1 << b) != 0` bit test that Common Lisp rewrites to `logbitp` |
 | `rust/gcd`, `rust/div` | `%` and `/` on unsigned values, and `!=` against zero |
+| `rust/operator` | Both halves of `!` in one test: `not_bool` on a `bool` and `not_int` on a `u8`, so the two spellings (`!` / `~`, `not` / `lnot`) are pinned against each other rather than one at a time. `not_int(0x0f)` is `0xf0` rather than `-16`, which is what makes it a test of OCaml's mask and not just of the operator |
 | `rust/calc` | The nearest thing to checked arithmetic in the tree, and instructive for not being it: `add` computes `a + b` and compares against a *domain* limit (`LIMIT: u32 = 1000`), so its `Error::Overflow` has nothing to do with `u32`'s bound. `checked_add` is what it would be if the bound were the type's |
 
-No fixture uses signed division, `!` on an integer, a signed wrapping
-operation, or any of `checked_` / `saturating_` / `overflowing_`. The first two
-are compile errors in the emitted Zig, so a fixture would fail loudly the day
-one is added.
+No fixture uses signed division, a signed wrapping operation, or any of
+`checked_` / `saturating_` / `overflowing_`. Signed division is a compile error
+in the emitted Zig, so a fixture would fail loudly the day one is added.
 
 ## The holes, ranked
 
@@ -279,24 +316,20 @@ This is the smallest fix in this document: `rem_is_signed` already answers the
 question, and `@divTrunc` is the counterpart to `@rem` -- verified to match
 Rust's truncation on negatives (fact 5). The two should be one helper.
 
-### 2. `!x` on an integer emits invalid Zig
+### 2. Zig precedence is unenforced
 
-Above. The Common Lisp backend already does the type test that the Zig backend
-needs; the Zig spelling is `~`.
-
-### 3. OCaml precedence
-
-Above. The only silent hole here, and the only one that needs a printer change
-rather than a translator one.
+Above. Not a present bug -- Zig's precedence matches Rust's on every operator
+either backend emits -- but it is the one remaining place where correct output
+depends on a coincidence rather than on a mechanism, and `print::ml` shows what
+the mechanism costs.
 
 ## Not implemented yet
 
 1. `@divTrunc` for signed `/` (hole 1).
-2. `~` for integer `!` (hole 2).
-3. Precedence-aware printing, for OCaml (hole 3).
-4. `saturating_*`, `checked_*`, `overflowing_*`, in that order.
-5. Signed wrapping arithmetic in Common Lisp (`ldb` plus sign extension).
-6. Float arithmetic -- `research/float.md` is the plan, and none of the
+2. Precedence-aware printing for Zig (hole 2). OCaml already has it.
+3. `saturating_*`, `checked_*`, `overflowing_*`, in that order.
+4. Signed wrapping arithmetic in Common Lisp (`ldb` plus sign extension).
+5. Float arithmetic -- `research/float.md` is the plan, and none of the
    operators above have been checked against `f32` / `f64` behavior.
 
 ## Not planned

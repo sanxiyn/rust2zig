@@ -45,6 +45,8 @@ pub enum Node {
     BangEqual(Box<Node>, Box<Node>),
     /// .bit_and
     BitAnd(Box<Node>, Box<Node>),
+    /// .bit_not
+    BitNot(Box<Node>),
     /// .bit_or
     BitOr(Box<Node>, Box<Node>),
     /// .bit_xor

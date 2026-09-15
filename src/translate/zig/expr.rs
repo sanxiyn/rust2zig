@@ -466,7 +466,12 @@ impl Translator {
                 Node::Deref(Box::new(expr))
             }
             syn::UnOp::Not(_) => {
-                Node::BoolNot(Box::new(expr))
+                let ty = expr_type(&self.scip, &eu.expr);
+                if ty.as_ref().is_some_and(|ty| is_int(peel_ref(ty))) {
+                    Node::BitNot(Box::new(expr))
+                } else {
+                    Node::BoolNot(Box::new(expr))
+                }
             }
             _ => {
                 Node::Todo("unary".to_string())
@@ -481,6 +486,12 @@ fn int_literal(li: &syn::LitInt) -> String {
         Some(text) => text.to_string(),
         None => text,
     }
+}
+
+fn is_int(ty: &syn::Type) -> bool {
+    let syn::Type::Path(tp) = ty else { return false };
+    let Some(segment) = tp.path.segments.last() else { return false };
+    matches!(segment.ident.to_string().as_str(), "i8" | "i16" | "i32" | "i64" | "i128" | "isize" | "u8" | "u16" | "u32" | "u64" | "u128" | "usize")
 }
 
 fn is_signed_int(ty: &syn::Type) -> bool {
