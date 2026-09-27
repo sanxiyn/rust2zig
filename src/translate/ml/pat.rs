@@ -26,8 +26,7 @@ impl Translator {
             syn::Pat::Path(pp) if self.is_variant(&pp.path) => {
                 Pattern::Construct(self.variant_name(&pp.path), None)
             }
-            syn::Pat::Struct(ps) if self.is_variant(&ps.path) => {
-                let name = self.variant_name(&ps.path);
+            syn::Pat::Struct(ps) => {
                 let mut fields = vec![];
                 for field in &ps.fields {
                     if let syn::Member::Named(ident) = &field.member {
@@ -36,8 +35,17 @@ impl Translator {
                     }
                 }
                 let closed = if ps.rest.is_none() { ClosedFlag::Closed } else { ClosedFlag::Open };
-                let record = Pattern::Record(fields, closed);
-                Pattern::Construct(name, Some(Box::new(record)))
+                if self.is_variant(&ps.path) {
+                    let record = Pattern::Record(fields, closed);
+                    return Pattern::Construct(self.variant_name(&ps.path), Some(Box::new(record)));
+                }
+                let ident = &ps.path.segments.last().unwrap().ident;
+                if let Some((label, _)) = fields.first_mut() {
+                    if let Longident::Lident(name) = label {
+                        *label = self.qualify(self.type_module(ident), name.clone());
+                    }
+                }
+                Pattern::Record(fields, closed)
             }
             syn::Pat::Tuple(pt) => {
                 Pattern::Tuple(pt.elems.iter().map(|elem| self.translate_pat(elem)).collect())
