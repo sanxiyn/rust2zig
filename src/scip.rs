@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use std::fs;
 use std::path::Path;
 
@@ -44,6 +45,11 @@ impl From<Span> for Range {
     }
 }
 
+struct Occurrence {
+    symbol: String,
+    is_definition: bool,
+}
+
 pub struct SymbolInfo {
     pub kind: Kind,
     pub range: Option<Range>,
@@ -51,13 +57,13 @@ pub struct SymbolInfo {
 }
 
 pub struct Scip {
-    occurrences: HashMap<Range, String>,
+    occurrences: HashMap<Range, Occurrence>,
     symbols: HashMap<String, SymbolInfo>,
 }
 
 impl Scip {
     pub fn symbol_at(&self, range: &Range) -> Option<&str> {
-        self.occurrences.get(range).map(|s| s.as_str())
+        self.occurrences.get(range).map(|o| o.symbol.as_str())
     }
 
     pub fn symbol_info(&self, symbol: &str) -> Option<&SymbolInfo> {
@@ -182,7 +188,7 @@ pub fn load(package_dir: &Path) -> Scip {
     let bytes = fs::read(&path).expect("failed to read SCIP file");
     let index = proto::Index::decode(bytes.as_slice()).expect("failed to decode SCIP");
 
-    let mut occurrences: HashMap<Range, String> = Default::default();
+    let mut occurrences: HashMap<Range, Occurrence> = Default::default();
     let mut definitions: HashMap<String, Range> = Default::default();
     let mut symbols: HashMap<String, SymbolInfo> = Default::default();
 
@@ -197,10 +203,21 @@ pub fn load(package_dir: &Path) -> Scip {
             if occurrence.symbol.is_empty() {
                 continue;
             }
-            if occurrence.symbol_roles & SymbolRole::Definition as i32 != 0 {
+            let is_definition = occurrence.symbol_roles & SymbolRole::Definition as i32 != 0;
+            if is_definition {
                 definitions.insert(occurrence.symbol.clone(), range.clone());
             }
-            occurrences.insert(range, occurrence.symbol.clone());
+            let new = Occurrence { symbol: occurrence.symbol.clone(), is_definition };
+            match occurrences.entry(range) {
+                Entry::Occupied(mut entry) => {
+                    if !entry.get().is_definition && new.is_definition {
+                        entry.insert(new);
+                    }
+                }
+                Entry::Vacant(entry) => {
+                    entry.insert(new);
+                }
+            }
         }
         for symbol in &document.symbols {
             let range = definitions.get(&symbol.symbol).cloned();

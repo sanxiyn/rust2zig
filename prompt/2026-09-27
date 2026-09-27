@@ -1,0 +1,20 @@
+Explore the project and give me a summary.
+Have a look at regex.md. Let's fix zero argument function for OCaml. Change nat to have zero argument zero() and fix backends.
+regex.md also discusses struct-destructuring pattern. Should be easy to fix, since we already handle such patterns for enum variants. Before implementation, answer two things: where would be appropriate place to add this in test? And is mutability aspect already handled correctly for this?
+Okay, one thing at a time. I want to fix shared range in SCIP for shorthands. Preferring definition sounds good. How would we do that? Using entry() instead of insert()?
+Let's do it properly. Have struct Occurrence, with symbol: String and is_definition: bool. Match on Entry, if occupied, update if !old.is_definition and new.is_definition. If vacant insert.
+Next, how do we fix ref_upgrade_bindings to upgrade all subpatterns which are ref bindings? By the way, is struct subpattern (not tuple subpattern) even recognized as ref binding at all?
+Fix wrap_ref_init to handle just top level cases, but don't touch tests. I will think about where to put tests.
+Fix ref_upgrade_bindings to upgrade subpatterns.
+Why not visit_pat_ident instead of visit_pat?
+Update is_ref_binding to take syn::Ident instead of syn::Pat and fix things up.
+I manually wrote a test fib. Does this adequately test wrap_ref_init/ref_upgrade_bindings/is_ref_binding fixes?
+Okay, we went through a bit of rabbit holes. What are loose threads?
+I manually added a new test to geometry. How does it look?
+Let's make this a new test, unimaginatively named geometry2, and rename test to test_translate.
+Fix OCaml to pass geometry2.
+Update regex.md.
+What's left?
+How do you think things are going so far?
+/insights
+/exit
