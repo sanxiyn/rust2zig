@@ -57,8 +57,10 @@
   (let ((p (make-point :x 1 :y 2)))
     (declare (type point p))
     (point-translate p 3 4)
-    (assert (= 4 (point-x p)))
-    (assert (= 6 (point-y p)))))
+    (let ((q (make-point :x 4 :y 6)))
+      (declare (type point q))
+      (assert (equalp p q))
+      (assert (equalp q p)))))
 
 (defun test-bounding-box-dot ()
   (let ((p (make-point :x 1 :y 2)))

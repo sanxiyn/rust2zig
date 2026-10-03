@@ -8,8 +8,9 @@ Implemented: `cargo run -- lisp <source-dir> <target-dir>` writes
 `test_test.sh` runs each target file under `sbcl --script` and `ecl --shell`,
 which is silent on success.
 
-Claims were checked against the latest SBCL (2.6.7) and ECL (26.5.5).
-Where they differ, the claim below says which implementation it is about, and
+Claims were checked against SBCL 2.6.7 and ECL 26.5.5, the latest when they
+were made; the fixtures also pass on SBCL 2.6.9, the version installed now.
+Where the two differ, the claim below says which implementation it is about, and
 [Portability](#portability) collects the differences.
 
 ## No Lisp AST
@@ -93,12 +94,20 @@ granularity, since Common Lisp has no per-type namespace.
 A crate function whose name is an external symbol of `COMMON-LISP` must be
 declared in `(:shadow ...)`.
 
-This is not a rare case. Of the 78 distinct free-function names across the
-current Rust fixtures, four collide: `gcd`, `max`, `min`, `position`, so
-`lisp/gcd.lisp`, `lisp/iter.lisp`, and `lisp/geometry.lisp` each need a shadow.
-Only a *free* function can collide -- a method or an associated function takes
-its type as a prefix, `Option::and` becoming `option-and`, which is why the 33
-method names contribute none even though `and` and `char` are among them.
+This is not a rare case. Of the 106 distinct free-function names across the
+Rust examples, five collide: `eval`, `gcd`, `max`, `min`, `position`, so
+`lisp/gcd.lisp`, `lisp/iter.lisp`, and `lisp/geometry.lisp` each need a shadow,
+as do `calc` and `regex`. A *type* name can collide too: both of those define
+an `Error`, which becomes the type `error` and shadows `#:error`. A method or an
+associated function cannot -- it takes its type as a prefix, `Option::and`
+becoming `option-and`, which is why the 36 method names contribute none even
+though `and` and `char` are among them.
+
+The prefix makes a *duplicate* possible instead, which the package handles
+rather than the shadow test. `Nat::Zero` is the type `nat-zero` and
+`Nat::zero` the function `nat-zero`, legal since Common Lisp keeps types and
+functions apart; the package lists symbols rather than definitions, so
+`lisp/nat.lisp` exports `#:nat-zero` once.
 
 The rule is mechanical -- for each name the crate defines, `find-symbol` it in
 `:common-lisp` and shadow it when the status is `:external`. It needs no type
@@ -210,6 +219,7 @@ advises against growing.
 | `u32` | `(unsigned-byte 32)` |
 | `isize` / `usize` | `fixnum` |
 | `Option<usize>` | `(or null fixnum)` |
+| `Box<T>`, `Cell<T>`, `&T` | `T`'s |
 | `&[T]`, `Vec<T>`, `&str` | `vector` |
 | erased type parameter `T` | `t` |
 
@@ -305,8 +315,8 @@ Being values rather than types, the variants are not in `structs`;
 resolves one against `structs`, and the same two lookups drive both a path
 expression and a pattern.
 
-The one construct this encoding cannot express is `_`; see
-[Wildcard arms](#wildcard-arms).
+A `_` arm is the one thing `ecase` cannot spell, so a match carrying one drops
+to plain `case`; see [Wildcard arms](#wildcard-arms).
 
 ### Data-carrying: one `defstruct` per variant, unioned by `deftype`
 
@@ -351,10 +361,14 @@ Three points are forced rather than chosen:
 
 ### What this forces elsewhere: a third equality
 
+`design/equality.md` is the cross-backend home for this question, including
+what Zig and OCaml do instead and one case the argument below does not reach:
+`equalp`'s case folding still applies to a string *inside* an aggregate.
+
 `equal` compares structs by identity, so two separately constructed `Point`s
 are `equal`-unequal and `equalp`-equal. `assert_eq!` on a struct or enum
-therefore needs `equalp`, which makes three cases where [Notes](#notes) records
-two. It stays type-driven, so it stays in the translator.
+therefore needs `equalp`, a third case beside the `=` and `equal` of
+[Notes](#notes). It stays type-driven, so it stays in the translator.
 
 Which raises the question of why not use `equalp` for everything. It is much
 closer to right than it looks: `equalp` is `equal` plus case-insensitive
@@ -375,11 +389,11 @@ from it. The number row is *not* a reason: `equalp` conflates `1` and `1.0`,
 but Rust's `==` is homogeneous, so a well-typed program never presents that
 pair.
 
-Two things follow, and the first is a defect in the rule as it stands today:
+Two things follow:
 
-* **`equal` is already wrong for slices.** `(equal #(1 2) #(1 2))` is NIL, so
-  `a == b` on two `&[i32]` would answer false. No current example compares
-  slices, so it is latent rather than broken, and `equalp` is the fix.
+* **`equal` is wrong for slices.** `(equal #(1 2) #(1 2))` is NIL, so `a == b`
+  on two `&[i32]` would answer false. Slices therefore sort with structs and
+  take `equalp`, below. No example compares two slices, so this is unpinned.
 * **`=` survives for reasons other than correctness.** `equalp` agrees with it
   on every pair Rust can produce. It is kept because `(= 1 "x")` signals
   `TYPE-ERROR` where `(equalp 1 "x")` quietly returns NIL -- the same
@@ -454,6 +468,10 @@ through.
 
 ## Pattern matching
 
+`design/match.md` is the cross-backend home for this question: what Zig and
+OCaml do instead, and why the holes this section refuses (a binding inside an
+or-pattern, a guard) are one missing lowering rather than several.
+
 Which form a `match` becomes is decided by
 [Structs and enums](#structs-and-enums): `ecase` over keywords for a
 payload-free enum, `etypecase` over variant structs for a data-carrying one.
@@ -479,7 +497,7 @@ shape as a type, `((or shape-dot shape-line) ...)`, which the code emits and no
 example exercises yet. Both were checked on SBCL and ECL before being emitted.
 
 Choosing between `ecase` and `etypecase` has to look *through* the alternation,
-since such an arm is no longer a bare path -- `keyword_pat` answers for an
+since such an arm is no longer a bare path -- `value_pat` answers for an
 or-pattern by asking its alternatives, which all name variants of the one enum.
 
 What an alternative may not carry is a binding. Rust allows
@@ -531,6 +549,38 @@ fallback marker at all but the universal type specifier: every clause stays a
 type specifier, and the last one needs no symbol the others do not use. Using
 it in `case` as well gives the two halves one spelling, and it is what
 `translate_pat` already returns for `Pat::Wild`.
+
+### A `let` pattern is an arm that cannot fail
+
+`let Point { mut x, y } = p;` goes through the same `translate_pat` a `match`
+arm does, which answers with a clause key and the bindings, each already
+applied to the key -- `(point-x p)` rather than an accessor name for the caller
+to apply. A `let` throws the key away, rustc having checked that the pattern
+always matches, and adds the bindings to its group, so `lisp/geometry2.lisp` is
+
+```lisp
+(let* ((p (make-point :x 1 :y 2))
+       (x (point-x p))
+       (y (point-y p)))
+  ...)
+```
+
+`let*` because the slot reads mention `p`, by the group's ordinary rule.
+
+**Not `with-accessors` or `with-slots`.** Both read better and both are wrong:
+they bind symbol macros, so the `(incf x 3)` that follows would write into `p`,
+where Rust's pattern copied the field out. Only plain bindings are faithful.
+
+Two shapes leave a marker. The value is named once per binding, so it must be a
+variable: `let Point { x, y } = origin()` would call `origin` twice, and needs
+the `%match` temporary a `match` binds, which nothing needs yet. And a pattern
+must not bind a name its own value mentions: `let Point { x: p, y } = p` would
+have `(point-y p)` read the *new* `p` inside a `let*` group.
+
+A field's subpattern may be a name or `_`; anything else answers `None`, in an
+arm as in a `let`. A literal there, `Point { x: 0, y }`, is a test the clause
+key cannot spell, and dropping it -- which is what the arm translation used to
+do -- made the clause match every point.
 
 ### Literal patterns
 
@@ -600,6 +650,7 @@ from the other side -- and it is the one place where a *literal* `t` and a
 | `for x in xs` | `(loop for x across xs ...)` |
 | `for i in 0..xs.len()` | `(loop for i of-type fixnum from 0 below (length xs) ...)` |
 | `for x in 1..=5` | `(loop for x of-type (signed-byte 32) from 1 to 5 ...)` |
+| `for _ in 2..=n` | `(loop for nil from 2 to n ...)` |
 | `for (i, x) in xs.iter().enumerate()` | `(loop for i of-type fixnum from 0 for x across xs ...)` |
 | `for (x, y) in std::iter::zip(a, b)` | `(loop for x across a for y across b ...)` |
 
@@ -641,6 +692,10 @@ against Rust.
   becomes `xs`, and the derefs the desugar passes insert (`*x`, `*self`)
   collapse to their operand. This is a translator lowering, not a desugar pass,
   for the reason `doc/desugar.md` gives -- the result is not valid Rust.
+  `Box` goes the same way, a Common Lisp structure being a reference already:
+  `Box::new(n)` is `n`, a `Box<Nat>` slot declares `nat`, and `type_ident`
+  looks through it so `n.to_int()` on a `&Box<Nat>` dispatches to
+  `nat-to-int`. `lisp/nat.lisp` pins it.
 * **Generics are erased.** Common Lisp is dynamically typed, so a type parameter
   disappears and a bound with it; `position<T: PartialEq>` is `(defun position
   (l v) ...)`. Neither the `generic` desugar pass nor anything resembling
@@ -653,9 +708,8 @@ against Rust.
   `i == l.len()` is `=` but `*e == v` on an erased `T` is `equal`. Being
   type-driven it belongs in the translator, not a desugar pass. An operand the
   translator cannot type picks `equal`.
-  [Structs and enums](#structs-and-enums) adds a third case,
-  `equalp`, and notes that `equal` is already the wrong answer for comparing
-  two slices.
+  [Structs and enums](#structs-and-enums) adds a third case, `equalp`, for
+  structs, data-carrying enums, and vectors.
 * **A bit test is `logbitp`.** Rust has no bit-test operator, so it spells one
   `x & (1 << b) != 0`; CL has one, and `logbitp` gives the boolean directly
   instead of through a comparison with zero. `translate_bit_test` recognizes the
@@ -680,11 +734,25 @@ against Rust.
   `(values (point-x p) ...)`, the return type declaims as
   `(values (signed-byte 32) ...)`, and `let (x0, y0, x1, y1) = bounding_box(s)`
   is a `multiple-value-bind` wrapping the statements that follow, exactly as a
-  `let` does. This is the one translation that works in a single position:
-  `values` is a calling convention rather than a value, so a tuple stored in a
-  variable or passed as an argument has no translation yet. A list would work
-  everywhere and read worse everywhere; the choice can be revisited when an
-  example needs it.
+  `let` does. A `_` in the pattern is bound to an `%ignore` name declared
+  `ignore`, since its value is still computed; any other non-name element, such
+  as a nested tuple, leaves a marker rather than being dropped.
+
+  When the right side is itself a tuple, there is nothing to unpack:
+  `let (a, b) = (1, 1)` in `lisp/fib.lisp` is `(let ((a 1) (b 1)) ...)`. It is
+  always `let` and never `let*`, since Rust evaluates the whole tuple before
+  binding any name -- in `let (a, b) = (1, a)` the second `a` is the outer one
+  -- and so it opens its own `let` rather than joining a group, which may be
+  `let*`. A pattern with a `_` keeps `multiple-value-bind`. Assignment to a
+  tuple is the third position, `(setf (values a b) ...)`; see
+  [Desugar passes](#desugar-passes).
+
+  These positions are the only ones that work: `values` is a calling convention
+  rather than a value. A tuple stored in a variable, passed as an argument, or
+  nested in another tuple is still emitted as `values`, and silently keeps only
+  its first element -- `((1, 2), 3)` becomes `(values (values 1 2) 3)`, which is
+  `1, 3`. A list would work everywhere and read worse everywhere; the choice can
+  be revisited when an example needs it.
 * **A unit function returns nil explicitly.** Rust's `()` is `nil`, but the
   last form of a translated body has no reason to produce it -- `point_translate`
   ends in an `incf`, whose value is the new coordinate. The emitted trailing
@@ -701,6 +769,13 @@ against Rust.
   `(ldb (byte 32 0) x)`, and widening a `u8` to `u32` is the operand untouched,
   the value already *being* that integer. Both widths must be known, so an
   unresolvable operand leaves a marker, as does `usize` at either end.
+* **Bitwise not is masked when unsigned.** `!x` on a `u8` is
+  `(ldb (byte 8 0) (lognot x))`. `lognot` alone answers `-16` for `!0x0f`,
+  which SBCL rejects against the `(unsigned-byte 8)` `declaim` and ECL lets
+  through to a failed assertion; the mask gives Rust's `240`. A signed operand
+  needs none, `lognot` already being `-x - 1` as Rust's `!` is, so `!` on an
+  `i8` is bare `lognot`. `usize` or an unresolvable width leaves a marker, as
+  for wrapping arithmetic. `lisp/operator.lisp` pins the unsigned case.
 * **`rotate_right` is two shifts.** The one operation with no Common Lisp
   counterpart -- there is `ash`, and no rotate -- so it expands into what it is
   made of: `(logior (ash x (- n)) (ldb (byte 32 0) (ash x (- 32 n))))`. The
@@ -745,7 +820,8 @@ against Rust.
   the payload can never itself be `nil`/false, so it collapses `Some(false)`,
   `Some(nil)`, and `Option<Option<T>>`. This is the same shape as
   `design/result.md`'s payload-free test and needs the same explicit statement
-  of when the erasure is legal. `rust/option` will decide it.
+  of when the erasure is legal. No fixture tests that bound yet; see
+  [Not implemented yet](#not-implemented-yet).
 
   `unwrap` is the one operation on it that does *not* erase. Under the
   encoding the payload already is the option, so `o.unwrap()` could be `o` --
@@ -763,7 +839,9 @@ against Rust.
   already rests on. This is the same make-the-check-loud reasoning that keeps
   `=` for numbers and declares integer types. It is `core`'s `unwrap` only: a
   crate that defines its own `Option` keeps its `option-unwrap`, which is what
-  the moniker check is for, and `lisp/option.lisp` pins both halves.
+  the moniker check is for. `lisp/option.lisp` pins that side; `core`'s
+  `unwrap` appears only in `rust/string` and `rust/regex`, neither of which has
+  a fixture yet, so it is emitted but unpinned.
 
   `lisp/div.lisp` is where the encoding pays off. `if let Some(x) = e` is a test
   and a binding at once, which is exactly what `nil` already gives: bind `x` to
@@ -826,6 +904,12 @@ against Rust.
   `let` binding `l` and `v` together, then a nested `let` for the rebound `v`.
   Declarations for a group merge into a single `declare`.
 
+  A struct or tuple-struct pattern joins a group like a plain name, adding one
+  binding per slot -- see
+  [A `let` pattern is an arm that cannot fail](#a-let-pattern-is-an-arm-that-cannot-fail).
+  A tuple pattern and `let _` do not: the first opens its own `let` or
+  `multiple-value-bind`, and the second binds nothing.
+
   Grouping is what keeps output flat. Emitting one `let` per Rust `let` would
   indent once per binding, where OCaml's `let ... in` chain stays visually flat.
 
@@ -840,8 +924,8 @@ against Rust.
   A human would write `(setf v 6)` rather than nesting for a rebinding, but that
   is only sound when the old binding is not captured, which is an analysis this
   backend does not have.
-* **Macros.** `assert_eq!(a, b)` is `(assert (= a b))` or `(assert (equal a b))`
-  by the `==` rule; `assert!(c)` is `(assert c)`. `panic!("msg")` is
+* **Macros.** `assert_eq!(a, b)` is `(assert (= a b))`, `(assert (equal a b))`,
+  or `(assert (equalp a b))` by the `==` rule; `assert!(c)` is `(assert c)`. `panic!("msg")` is
   `(error "msg")`, which signals rather than returning -- the same end as Rust's
   unwinding panic, and it satisfies whatever the function's `declaim` promises,
   since no value is ever produced. `rust/option`'s `unwrap` is where it appears.
@@ -864,11 +948,13 @@ runs, and why the rest stay off:
 |---|---|---|
 | `binary` | yes | reference-operand derefs, then erased |
 | `compound_assignment` | no | `incf`/`decf` are native, and the rest fold in the translator |
+| `destructuring` | no | `(setf (values a b) ...)` is native parallel assignment |
 | `generic` | no | type parameters are erased; turbofish would be noise |
 | `integer_literal` | no | Common Lisp integers are unbounded, so a literal never needs its width pinned |
 | `match_ergonomics` | yes | binding modes made explicit, then erased |
 | `self_type` | yes | `Self` spelled out, there being no such name in the target |
 | `shadowing` | no | Common Lisp permits shadowing as Rust does |
+| `type_alias` | yes | runs for every backend; an alias is expanded where it is used and its item removed |
 
 `self_type` is the first pass written *for* this backend rather than inherited,
 and the first the Zig backend deliberately declines -- Common Lisp has no `Self`
@@ -878,9 +964,21 @@ no SCIP is consulted, and the rewrite is one ident to another. Why it is a pass
 rather than the translator lookup it began as, and why it keeps the original
 span instead of a synthetic one, are in `doc/lisp-random.md`.
 
-The passes this tree does not have -- `destructuring`, `try_expression`,
-`type_alias` -- are on the other backends' side and unexamined here;
-`try_expression` in particular waits on a representation for `Result` and `?`.
+`destructuring` splits `(a, b) = (b, a + b)` into a `let` of temporaries and
+one assignment per place, because OCaml has no parallel assignment. Common Lisp
+does: a tuple translates to `values` on either side, and `values` is a `setf`
+place, so the assignment is `(setf (values a b) (values b (+ a b)))` with no
+help. `setf` evaluates the whole right side before storing into any place,
+which is what makes the swap sound. `lisp/fib.lisp` pins it. Two shapes fall
+outside it: a `_` place is an `Expr::Infer`, which leaves a marker, and a
+nested tuple would put `values` inside `values` on the right, where only the
+primary value survives. No example has either.
+
+`type_alias` has nothing to show here yet: the only aliases, in `rust/calc` and
+`rust/regex`, are both `type Result<T> = core::result::Result<T, Error>`, and
+`Result` has no encoding, so the expanded type declares as `t` either way.
+`try_expression` is not wired into `desugar` at all, and for this backend waits
+on a representation for `Result` and `?`.
 
 The `compound_assignment` row was the interesting one: it looked like the first
 case where a backend wants a pass for some operators and not others, which the
@@ -891,13 +989,22 @@ operators CL lacks need a translator decision anyway.
 ## Not implemented yet
 
 The translator covers functions, locals, control flow, arithmetic, indexing,
-`len`, `assert`, structs, enums, methods, and tuples in return position.
-Everything below leaves a `todo` marker rather than disappearing --
-`(todo "expr")` inline, so it is loud, and `;; TODO: mod` at top level, so the
-rest of the file still loads. Twelve of the sixteen Rust examples translate
-marker-free, and those twelve are exactly the ones with a `lisp` fixture.
+`len`, `assert`, structs, enums, methods, and tuples in return, binding, and
+assignment position. Everything below leaves a `todo` marker rather than
+disappearing -- `(todo "expr")` inline, so it is loud, and `;; TODO: mod` at
+top level, so the rest of the file still loads. Seventeen of the twenty-three
+Rust examples translate marker-free, and those seventeen are exactly the ones
+with a `lisp` fixture. The six that do not, and what stops each:
 
-`doc/lisp-regex.md` inventories the largest of the four that do not, and is
+| Example | Markers |
+|---|---|
+| `calc` | `Result` and `?` |
+| `drop`, `drop2` | `static mut`, and with it every function that touches one |
+| `hash` | a match guard, `as_bytes` |
+| `string` | `chars`, `str`'s `len`, `len_utf8` |
+| `regex` | most of the above, and more |
+
+`doc/lisp-regex.md` inventories the largest of the six, and is
 worth reading alongside this list: `rust/regex` reaches most of what is below
 at once, and it also found six places where an unhandled construct is *not*
 loud. One of those is worth stating here, since it applied to every crate
@@ -912,10 +1019,16 @@ untranslated rather than marked.
   for literals as well as keywords and types; see
   [An or-pattern is one clause](#an-or-pattern-is-one-clause) for why a binding
   is not.
+* **A match guard.** `Some(v) if 0 < v && v < bytes.len() => ...` in
+  `rust/hash` leaves a marker; `design/match.md` has the lowering it waits on.
 * **A `match` whose arm is a bare binding.** `match e { c => ... }` binds the
   scrutinee and always matches, so it is a `let` in disguise rather than a
-  dispatch, and `translate_pat` has no arm for `Pat::Ident`. `rust/regex` is
-  where it shows.
+  dispatch. `translate_pat` answers for `Pat::Ident` -- a `let` needs it -- but
+  `translate_arm` declines it, since whether such a match should still be a
+  `case` at all is a question of its own. `rust/regex` is where it shows.
+* **A destructuring `let` of anything but a variable.**
+  `let Point { x, y } = origin()` needs the value bound to a temporary first;
+  see [A `let` pattern](#a-let-pattern-is-an-arm-that-cannot-fail).
 * **`Option` and `Result`.** `None` is `nil` and `Some(x)` is `x` today, which
   `rust/iter` exercises and `rust/div` pins in a signature and an `if let` -- it
   is only sound while the payload can never itself be `nil` or false. No fixture
@@ -923,7 +1036,7 @@ untranslated rather than marked.
   which is a plain generic enum and takes the `defstruct` path. What is still
   missing is `match` on a `core` `Option`: it reaches the `etypecase` path,
   finds no variant structs, and leaves a marker. `Result` and `?` have no design
-  at all.
+  at all; `rust/calc` is the example built around them.
 * **Method calls on foreign types.** A method on a *crate-defined* type is
   implemented and needs no moniker: `translate_method_call` asks `expr_ty` for
   the receiver's type and emits the prefixed call when that type is one of the
@@ -933,11 +1046,13 @@ untranslated rather than marked.
   `Vec`'s `len`, `push`, and `pop`, `Option::unwrap`, the `wrapping_*` family,
   and `rotate_right` -- and anything else leaves a marker.
 
-  The remaining markers are all of that second kind, and nearly all of them are
-  [Strings and chars](#not-implemented-yet) rather than a gap in the dispatch:
-  `rust/hash` wants `as_bytes`, and `rust/regex` wants `chars`, `next`,
-  `checked_add`, `len_utf8`, `is_some`, and `str`'s own `len`, which the slice
-  moniker does not match.
+  The remaining method-call markers are all of that second kind, and nearly all
+  of them are [Strings and chars](#not-implemented-yet) rather than a gap in
+  the dispatch: `rust/string` wants `chars`, `next`, `len_utf8`, and `str`'s own
+  `len`, which the slice moniker does not match; `rust/hash` wants `as_bytes`;
+  `rust/regex` wants all of those plus `checked_add` and `is_some`. The one
+  exception is `rust/calc`'s `unwrap`, which is `Result`'s rather than
+  `Option`'s.
 
   `Cell` erasure is free here for the reason `&mut self` is: a Common Lisp
   structure is a reference already, so `design/cell.md`'s Zig question -- which
@@ -951,14 +1066,16 @@ untranslated rather than marked.
   [Notes](#notes).
 * **Drop.** CL is garbage-collected with no destructors; `unwind-protect` is the
   only scope-exit hook. `design/drop.md`'s `defer x.drop()` has no direct
-  counterpart.
+  counterpart. `rust/drop` and `rust/drop2` do not reach that question yet:
+  they log drops in two `static mut`s, each a top-level `;; TODO: static`, and
+  every function that touches them is a marker.
 * **Portability.** See [Portability](#portability): the output runs on SBCL and
   ECL alike, but only SBCL enforces the type declarations.
 
 ## Portability
 
-Two implementations run the fixtures: SBCL 2.6.7 and ECL 26.5.5, both wired
-into `test_test.sh`. All twelve target files load and pass their own tests on
+Two implementations run the fixtures: SBCL (2.6.9 now) and ECL 26.5.5, both wired
+into `test_test.sh`. All seventeen target files load and pass their own tests on
 both, silently. What differs is not syntax but what a declaration *means*.
 
 ### Declarations are checked on SBCL and ignored on ECL

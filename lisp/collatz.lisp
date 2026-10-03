@@ -1,0 +1,32 @@
+(defpackage #:collatz
+  (:use #:common-lisp)
+  (:export #:collatz))
+
+(in-package #:collatz)
+
+(declaim (ftype (function ((unsigned-byte 32)) vector) collatz))
+(defun collatz (start)
+  (let ((steps (make-array 0 :adjustable t :fill-pointer t))
+        (n start))
+    (declare (type vector steps)
+             (type (unsigned-byte 32) n))
+    (loop do (vector-push-extend n steps)
+             (when (= n 1)
+               (return))
+             (case (rem n 2)
+               (0 (setf n (truncate n 2)))
+               (1 (setf n (+ (* 3 n) 1)))
+               (t (error "unreachable"))))
+    steps))
+
+(defun test-collatz ()
+  (let ((steps (collatz 3)))
+    (declare (type vector steps))
+    (assert (= 8 (length steps)))
+    (assert (= 3 (aref steps 0)))
+    (assert (= 10 (aref steps 1)))
+    (assert (= 1 (aref steps 7)))
+    (assert (equal 1 (vector-pop steps)))
+    (assert (= 7 (length steps)))))
+
+(test-collatz)
