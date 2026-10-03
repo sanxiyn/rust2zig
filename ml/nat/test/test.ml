@@ -1,5 +1,5 @@
 open Lib
 
 let () =
-    let three = Nat.succ (Nat.succ (Nat.succ Nat.Zero)) in
+    let three = Nat.succ (Nat.succ (Nat.succ (Nat.zero ()))) in
     assert (3 = Nat.to_int three)

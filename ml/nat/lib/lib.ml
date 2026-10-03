@@ -3,6 +3,9 @@ module Nat = struct
         | Zero
         | Succ of t
 
+    let zero () =
+        Zero
+
     let succ n =
         Succ n
 

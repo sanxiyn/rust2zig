@@ -4,6 +4,10 @@ pub enum Nat {
 }
 
 impl Nat {
+    pub fn zero() -> Nat {
+        Nat::Zero
+    }
+
     pub fn succ(n: Nat) -> Nat {
         Nat::Succ(Box::new(n))
     }
@@ -18,6 +22,6 @@ impl Nat {
 
 #[test]
 fn test_to_int() {
-    let three = Nat::succ(Nat::succ(Nat::succ(Nat::Zero)));
+    let three = Nat::succ(Nat::succ(Nat::succ(Nat::zero())));
     assert_eq!(3, three.to_int());
 }
