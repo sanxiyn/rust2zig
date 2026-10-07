@@ -99,3 +99,11 @@ impl Translator {
         }
     }
 }
+
+pub fn pat_guard(pat: &syn::Pat) -> (&syn::Pat, Option<&syn::Expr>) {
+    if let syn::Pat::Guard(pg) = pat {
+        (&*pg.pat, Some(&*pg.guard))
+    } else {
+        (pat, None)
+    }
+}

@@ -41,6 +41,7 @@ impl Collect<'_> {
 
     fn bind_pat(&mut self, pat: &syn::Pat) {
         match pat {
+            syn::Pat::Guard(pg) => self.bind_pat(&pg.pat),
             syn::Pat::Ident(pi) => self.bind_ident(&pi.ident),
             syn::Pat::Reference(pr) => self.bind_pat(&pr.pat),
             syn::Pat::Struct(ps) => {
@@ -137,9 +138,6 @@ impl<'ast> syn::visit::Visit<'ast> for Collect<'_> {
         for arm in &em.arms {
             self.stack.push(Default::default());
             self.bind_pat(&arm.pat);
-            if let Some((_, guard)) = &arm.guard {
-                syn::visit::visit_expr(self, guard);
-            }
             syn::visit::visit_expr(self, &arm.body);
             self.stack.pop();
         }

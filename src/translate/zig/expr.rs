@@ -3,7 +3,7 @@ use crate::translate::name::camel_to_snake;
 use crate::translate::ty::{expr_type, int_bits, peel_ref};
 use super::{PathMode, Translator, dotted_name};
 use super::call::Wrapping;
-use super::pat::Accessor;
+use super::pat::{Accessor, pat_guard};
 
 enum OptionPat {
     Some(String),
@@ -252,7 +252,8 @@ impl Translator {
 
     fn translate_match(&self, em: &syn::ExprMatch) -> Node {
         let is_option = em.arms.iter().any(|arm| {
-            matches!(self.option_pat(&arm.pat), Some(OptionPat::Some(_) | OptionPat::None))
+            let (pat, _) = pat_guard(&arm.pat);
+            matches!(self.option_pat(pat), Some(OptionPat::Some(_) | OptionPat::None))
         });
         if is_option {
             return self.translate_match_option(em);
@@ -345,10 +346,11 @@ impl Translator {
         let mut stmts = vec![];
         let count = em.arms.len();
         for (i, arm) in em.arms.iter().enumerate() {
-            let Some(pat) = self.option_pat(&arm.pat) else {
+            let (pat, guard) = pat_guard(&arm.pat);
+            let Some(pat) = self.option_pat(pat) else {
                 return Node::Todo("match".to_string());
             };
-            let guard = arm.guard.as_ref().map(|(_, guard)| self.translate_expr(guard));
+            let guard = guard.map(|guard| self.translate_expr(guard));
             let body = self.translate_expr(&arm.body);
             if i + 1 == count && guard.is_none() {
                 return Node::BlockExpr { stmts, result: Box::new(body) };

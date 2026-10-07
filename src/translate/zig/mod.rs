@@ -130,7 +130,7 @@ impl Translator {
                 if let syn::Type::Path(tp) = &*i.self_ty {
                     let ident = &tp.path.segments.last().unwrap().ident;
                     if let Some(symbol) = self.scip.symbol_at(&ident.span().into()) {
-                        if let Some((_, path, _)) = &i.trait_ {
+                        if let Some((path, _)) = &i.trait_ {
                             if self.check_moniker(path, "core::ops::drop::Drop") {
                                 self.drop_types.insert(symbol.to_string());
                             }

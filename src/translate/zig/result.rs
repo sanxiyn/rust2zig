@@ -112,9 +112,6 @@ impl Translator {
         let mut ok = None;
         let mut err = None;
         for arm in &em.arms {
-            if arm.guard.is_some() {
-                return Node::Todo("match".to_string());
-            }
             match self.result_pat(&arm.pat) {
                 Some(ResultPat::Ok(name)) => ok = Some((name, &arm.body)),
                 Some(ResultPat::Err(name)) => err = Some((name, &arm.body)),
