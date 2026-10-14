@@ -417,9 +417,6 @@ impl Printer {
                 let elements: Vec<String> = elements.iter().map(|e| self.expr(e)).collect();
                 format!("{}{{ {} }}", ty, elements.join(", "))
             }
-            Node::ArrayRepeat(value, len) => {
-                format!(".{{{}}} ** {}", self.expr(value), self.expr(len))
-            }
             Node::Assign(left, right) => format!("{} = {}", self.expr(left), self.expr(right)),
             Node::BitNot(expr) => format!("~{}", self.expr(expr)),
             Node::BoolNot(expr) => format!("!{}", self.expr(expr)),

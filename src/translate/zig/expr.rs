@@ -411,8 +411,7 @@ impl Translator {
 
     fn translate_repeat(&self, er: &syn::ExprRepeat) -> Node {
         let value = self.translate_expr(&er.expr);
-        let len = self.translate_expr(&er.len);
-        Node::ArrayRepeat(Box::new(value), Box::new(len))
+        Node::BuiltinCall("splat".to_string(), vec![value])
     }
 
     fn translate_return(&self, er: &syn::ExprReturn) -> Node {
