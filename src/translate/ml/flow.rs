@@ -1,7 +1,7 @@
 use syn::visit::Visit;
 
 use crate::ast::ml::{Case, Constant, Direction, Expression, Longident, Pattern};
-use super::{Translator, apply, qualified, todo, unit};
+use super::{Translator, apply, qualified, raise, todo, unit};
 
 #[derive(Clone, Copy, PartialEq)]
 enum Jump {
@@ -32,6 +32,20 @@ fn block_has_jump(block: &syn::Block, jump: Jump) -> bool {
 }
 
 impl Translator {
+    pub fn translate_break(&self, eb: &syn::ExprBreak) -> Expression {
+        if eb.label.is_some() || eb.expr.is_some() {
+            return todo("break");
+        }
+        raise("Exit")
+    }
+
+    pub fn translate_continue(&self, ec: &syn::ExprContinue) -> Expression {
+        if ec.label.is_some() {
+            return todo("continue");
+        }
+        raise("Continue")
+    }
+
     pub fn translate_for_loop(&self, efl: &syn::ExprForLoop) -> Expression {
         if let syn::Expr::Range(er) = &*efl.expr {
             return self.translate_for_range(efl, er);
