@@ -186,12 +186,12 @@ pub enum Node {
         type_params: Vec<String>,
         is_union: bool,
         variants: Vec<EnumVariant>,
-        methods: Vec<Node>,
+        impl_items: Vec<Node>,
     },
     StructDecl {
         name: String,
         fields: Vec<Field>,
-        methods: Vec<Node>,
+        impl_items: Vec<Node>,
     },
     FnDecl {
         name: String,

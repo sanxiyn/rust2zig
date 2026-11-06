@@ -66,12 +66,12 @@ impl Printer {
             Node::SimpleVarDecl { var, expr } => {
                 self.simple_var_decl(var, expr.as_deref());
             }
-            Node::EnumDecl { name, type_params, is_union, variants, methods } => {
+            Node::EnumDecl { name, type_params, is_union, variants, impl_items } => {
                 let keyword = if *is_union { "union(enum)" } else { "enum" };
                 if type_params.is_empty() {
                     self.out.push_str(&format!("const {} = {} {{\n", name, keyword));
                     self.indent();
-                    self.container_body(methods, |printer| printer.variants(variants));
+                    self.container_body(impl_items, |printer| printer.variants(variants));
                     self.dedent();
                     self.out.push_str("};\n");
                 } else {
@@ -80,17 +80,17 @@ impl Printer {
                     self.indent();
                     self.out.push_str(&format!("{}return {} {{\n", self.pad(), keyword));
                     self.indent();
-                    self.container_body(methods, |printer| printer.variants(variants));
+                    self.container_body(impl_items, |printer| printer.variants(variants));
                     self.dedent();
                     self.out.push_str(&format!("{}}};\n", self.pad()));
                     self.dedent();
                     self.out.push_str("}\n");
                 }
             }
-            Node::StructDecl { name, fields, methods } => {
+            Node::StructDecl { name, fields, impl_items } => {
                 self.out.push_str(&format!("const {} = struct {{\n", name));
                 self.indent();
-                self.container_body(methods, |printer| {
+                self.container_body(impl_items, |printer| {
                     for field in fields {
                         printer.out.push_str(&format!("{}{}: {},\n", printer.pad(), field.name, printer.expr(&field.ty)));
                     }

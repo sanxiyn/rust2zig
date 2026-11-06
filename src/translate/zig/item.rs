@@ -63,8 +63,11 @@ impl Translator {
             name: camel_to_snake(&variant.ident.to_string()),
             payload: self.translate_variant_payload(&variant.fields),
         }).collect();
-        let methods = self.translate_methods(impls);
-        Node::EnumDecl { name, type_params, is_union: has_data, variants, methods }
+        let mut impl_items = vec![];
+        for impl_ in impls {
+            impl_items.extend(self.translate_impl_items(impl_));
+        }
+        Node::EnumDecl { name, type_params, is_union: has_data, variants, impl_items }
     }
 
     fn translate_struct(&self, s: &syn::ItemStruct) -> Node {
@@ -81,27 +84,28 @@ impl Translator {
             name: field.ident.as_ref().unwrap().to_string(),
             ty: self.translate_type(&field.ty),
         }).collect();
-        let methods = self.translate_methods(impls);
-        Node::StructDecl { name, fields, methods }
+        let mut impl_items = vec![];
+        for impl_ in impls {
+            impl_items.extend(self.translate_impl_items(impl_));
+        }
+        Node::StructDecl { name, fields, impl_items }
     }
 
-    fn translate_methods(&self, impls: &[syn::ItemImpl]) -> Vec<Node> {
+    fn translate_impl_items(&self, impl_: &syn::ItemImpl) -> Vec<Node> {
         let mut impl_items = vec![];
-        for i in impls {
-            for ii in &i.items {
-                match ii {
-                    syn::ImplItem::Const(c) => {
-                        let c = self.translate_associated_const(c);
-                        impl_items.push(c);
-                    }
-                    syn::ImplItem::Fn(method) => {
-                        let method = self.translate_method(method);
-                        impl_items.push(method);
-                    }
-                    _ => {
-                        let impl_item = Node::Todo("impl item".to_string());
-                        impl_items.push(impl_item);
-                    }
+        for ii in &impl_.items {
+            match ii {
+                syn::ImplItem::Const(c) => {
+                    let c = self.translate_associated_const(c);
+                    impl_items.push(c);
+                }
+                syn::ImplItem::Fn(method) => {
+                    let method = self.translate_method(method);
+                    impl_items.push(method);
+                }
+                _ => {
+                    let impl_item = Node::Todo("impl item".to_string());
+                    impl_items.push(impl_item);
                 }
             }
         }
