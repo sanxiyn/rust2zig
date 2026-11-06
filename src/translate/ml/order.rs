@@ -7,13 +7,13 @@ use crate::ast::ml::{RecFlag, StructureItem, ValueBinding};
 use crate::scip::Scip;
 use super::Translator;
 
-pub struct Def {
+pub struct Definition {
     pub symbols: HashSet<String>,
-    pub refs: HashSet<String>,
+    pub references: HashSet<String>,
     pub item: StructureItem,
 }
 
-pub fn order(defs: Vec<Def>) -> Vec<StructureItem> {
+pub fn order(defs: Vec<Definition>) -> Vec<StructureItem> {
     let mut graph: DiGraph<(), ()> = DiGraph::with_capacity(defs.len(), defs.len());
     for _ in &defs {
         graph.add_node(());
@@ -25,7 +25,7 @@ pub fn order(defs: Vec<Def>) -> Vec<StructureItem> {
         }
     }
     for (i, def) in defs.iter().enumerate() {
-        for symbol in &def.refs {
+        for symbol in &def.references {
             if let Some(&j) = owner.get(symbol.as_str()) {
                 graph.add_edge(NodeIndex::new(i), NodeIndex::new(j), ());
             }
@@ -33,7 +33,7 @@ pub fn order(defs: Vec<Def>) -> Vec<StructureItem> {
     }
 
     let components = tarjan_scc(&graph);
-    let mut defs: Vec<Option<Def>> = defs.into_iter().map(Some).collect();
+    let mut defs: Vec<Option<Definition>> = defs.into_iter().map(Some).collect();
     let mut out = vec![];
     for component in components {
         let mut members: Vec<usize> = component.iter().map(|node| node.index()).collect();

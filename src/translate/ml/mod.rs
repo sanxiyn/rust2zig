@@ -260,7 +260,7 @@ impl Translator {
                     continue;
                 }
             }
-            defs.extend(self.item_defs(item));
+            defs.extend(self.translate_item(item));
         }
         (order::order(defs), test)
     }
