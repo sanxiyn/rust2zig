@@ -58,6 +58,15 @@ impl Translator {
                 let field = member_name(&ef.member);
                 Expression::SetField(Box::new(base), Longident::Lident(field), Box::new(right))
             }
+            syn::Expr::Index(ei) => {
+                let base = self.translate_expr(&ei.expr);
+                let index = self.translate_expr(&ei.index);
+                if self.is_vec_expr(&ei.expr) {
+                    let set = qualified("Dynarray", "set");
+                    return Expression::Apply(Box::new(set), vec![base, index, right]);
+                }
+                Expression::ArraySet(Box::new(base), Box::new(index), Box::new(right))
+            }
             syn::Expr::Path(ep) => {
                 let ident = &ep.path.segments.last().unwrap().ident;
                 let left = Expression::Ident(Longident::Lident(escape_ml(&ident.to_string())));

@@ -1,0 +1,20 @@
+Explore the project and give me a summary.
+Check doc/ml.md against current status.
+Yes, make doc/ml.md up to date.
+Have a look under research directory and research levenshtein crate as a potential candidate.
+Write a byte-level version with a test to rust/levenshtein.
+Let's fix enumerate on bytes. It seems setting module to String/Array depending on is_string_expr(iterable) should be enough.
+Right. How would we fix that? `let code_a = Char.code code_a in` before the loop body?
+Let's do it. Just handle identifier pattern for now. Fix translate_for_each as well.
+How would we fix v[i] = x? Expr::Index arm in translate_assign and is_vec_expr?
+Add ArraySet, but just use is_vec_expr in translate_assign as in translate_index.
+Do not forget to sort match arms. Index should come before Path.
+Let's fix else branch bug in OCaml backend as well.
+I have generated ml/levenshtein. Update relevant docs. research/levenshtein.md, but I think flow and vec design doc as well? What else?
+Update type.md.
+Add CoreType::Tuple (Ptyp_tuple) to OCaml AST.
+Add Type::Tuple arm to translate_type.
+Handle Type::Reference by erasure.
+How do you think things are going so far?
+/insights
+/exit

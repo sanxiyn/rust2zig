@@ -43,6 +43,13 @@ impl Translator {
                 }
                 CoreType::Constr(name, type_args)
             }
+            syn::Type::Reference(tr) => self.translate_type(&tr.elem),
+            syn::Type::Tuple(tt) => {
+                if tt.elems.is_empty() {
+                    return CoreType::Constr(Longident::Lident("unit".to_string()), vec![]);
+                }
+                CoreType::Tuple(tt.elems.iter().map(|elem| self.translate_type(elem)).collect())
+            }
             _ => CoreType::Constr(Longident::Lident("_".to_string()), vec![]),
         }
     }

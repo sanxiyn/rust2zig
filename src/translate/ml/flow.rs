@@ -1,6 +1,7 @@
 use syn::visit::Visit;
 
-use crate::ast::ml::{Case, Constant, Direction, Expression, Longident, Pattern};
+use crate::ast::ml::{Case, Constant, Direction, Expression, Longident, Pattern, RecFlag, ValueBinding};
+use crate::translate::name::escape_ml;
 use super::{Translator, apply, qualified, raise, todo, unit};
 
 #[derive(Clone, Copy, PartialEq)]
@@ -70,10 +71,15 @@ impl Translator {
 
     fn translate_for_each(&self, efl: &syn::ExprForLoop) -> Expression {
         let pat = self.translate_pat(&efl.pat);
+        let string = self.is_string_expr(&efl.expr);
+        let module = if string { "String" } else { "Array" };
         let iterable = self.translate_expr(&efl.expr);
-        let body = self.loop_body(&efl.body);
+        let mut body = self.loop_body(&efl.body);
+        if string {
+            body = byte_element(&efl.pat, body);
+        }
         let func = Expression::Function(vec![pat], Box::new(body));
-        let node = Expression::Apply(Box::new(qualified("Array", "iter")), vec![func, iterable]);
+        let node = Expression::Apply(Box::new(qualified(module, "iter")), vec![func, iterable]);
         self.wrap_break(&efl.body, node)
     }
 
@@ -85,10 +91,16 @@ impl Translator {
             return todo("for");
         }
         let params = pt.elems.iter().map(|elem| self.translate_pat(elem)).collect();
-        let iterable = self.translate_expr(self.peel_iter(&emc.receiver));
-        let body = self.loop_body(&efl.body);
+        let receiver = self.peel_iter(&emc.receiver);
+        let string = self.is_string_expr(receiver);
+        let module = if string { "String" } else { "Array" };
+        let iterable = self.translate_expr(receiver);
+        let mut body = self.loop_body(&efl.body);
+        if string {
+            body = byte_element(&pt.elems[1], body);
+        }
         let func = Expression::Function(params, Box::new(body));
-        let node = Expression::Apply(Box::new(qualified("Array", "iteri")), vec![func, iterable]);
+        let node = Expression::Apply(Box::new(qualified(module, "iteri")), vec![func, iterable]);
         self.wrap_break(&efl.body, node)
     }
 
@@ -175,15 +187,8 @@ impl Translator {
         }
         let cond = self.translate_expr(&ei.cond);
         let then_branch = self.translate_block(&ei.then_branch);
-        let else_branch = if let Some((_, else_expr)) = &ei.else_branch {
-            if let syn::Expr::Block(eb) = &**else_expr {
-                Some(Box::new(self.translate_block(&eb.block)))
-            } else {
-                None
-            }
-        } else {
-            None
-        };
+        let else_branch = ei.else_branch.as_ref()
+            .map(|(_, else_expr)| Box::new(self.translate_expr(else_expr)));
         Expression::IfThenElse(Box::new(cond), Box::new(then_branch), else_branch)
     }
 
@@ -197,14 +202,9 @@ impl Translator {
         let bind = pi.ident.to_string();
         let scrutinee = self.translate_expr(&el.expr);
         let then_branch = self.translate_block(&ei.then_branch);
-        let else_branch = if let Some((_, else_expr)) = &ei.else_branch {
-            if let syn::Expr::Block(eb) = &**else_expr {
-                self.translate_block(&eb.block)
-            } else {
-                unit()
-            }
-        } else {
-            unit()
+        let else_branch = match &ei.else_branch {
+            Some((_, else_expr)) => self.translate_expr(else_expr),
+            None => unit(),
         };
         let some = Case {
             lhs: Pattern::Construct(Longident::Lident("Some".to_string()), Some(Box::new(Pattern::Var(bind)))),
@@ -249,6 +249,18 @@ fn handler(name: &str) -> Case {
         guard: None,
         rhs: unit(),
     }
+}
+
+fn byte_element(pat: &syn::Pat, body: Expression) -> Expression {
+    let syn::Pat::Ident(pi) = pat else { return body };
+    let name = escape_ml(&pi.ident.to_string());
+    let arg = Expression::Ident(Longident::Lident(name.clone()));
+    let binding = ValueBinding {
+        pat: Pattern::Var(name),
+        params: vec![],
+        expr: Expression::Apply(Box::new(qualified("Char", "code")), vec![arg]),
+    };
+    Expression::Let(RecFlag::Nonrecursive, vec![binding], Box::new(body))
 }
 
 fn int(n: u64) -> Expression {
