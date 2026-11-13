@@ -52,6 +52,8 @@ pub enum Expression {
     Array(Vec<Expression>),
     /// `a.(i)`
     ArrayGet(Box<Expression>, Box<Expression>),
+    /// `a.(i) <- x`
+    ArraySet(Box<Expression>, Box<Expression>, Box<Expression>),
     /// Pexp_assert
     Assert(Box<Expression>),
     /// Pexp_constant
@@ -99,6 +101,8 @@ pub enum Expression {
 pub enum Pattern {
     /// Ppat_constant
     Constant(Constant),
+    /// Ppat_constraint
+    Constraint(Box<Pattern>, CoreType),
     /// Ppat_construct
     Construct(Longident, Option<Box<Pattern>>),
     /// Ppat_or
@@ -200,6 +204,8 @@ pub struct LabelDeclaration {
 pub enum CoreType {
     /// Ptyp_constr
     Constr(Longident, Vec<CoreType>),
+    /// Ptyp_tuple
+    Tuple(Vec<CoreType>),
     /// Ptyp_var
     Var(String),
 }

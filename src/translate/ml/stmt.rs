@@ -30,12 +30,12 @@ impl Translator {
             return unit();
         };
         match first {
-            syn::Stmt::Expr(expr, _) => {
+            syn::Stmt::Expr(expr, semi) => {
                 let return_type = match expr {
                     syn::Expr::MethodCall(emc) => self.scip.return_type_at(&emc.method.span().into()),
                     _ => None,
                 };
-                let expr = if return_type.is_some() {
+                let expr = if semi.is_some() && return_type.is_some() {
                     let expr = self.translate_expr(expr);
                     apply("ignore", vec![expr])
                 } else {

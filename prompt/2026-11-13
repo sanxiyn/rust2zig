@@ -1,0 +1,16 @@
+Explore the project and give me a summary.
+Let's fix ignore bug on OCaml backend. In stmt.rs, it seems we should match Expr(expr, semi) and check semi?
+That seems wrong. semi is unrelated to return_type. I'd check semi.is_some() && return_type.is_some() to add ignore.
+Yes. How would we do that? Visitor with visit_expr_field collecting all symbols with field access and generating type annotation if there is any?
+Yes, let's do it. Do check current module and update the doc.
+What do you think of the new example rect?
+In OCaml printer, use field punning for expression as well as pattern.
+Update ml/rect.
+Let's look at geometry2 for Zig, which needs to handle struct pattern. How would we do that?
+OCaml backend shares code for translate_local and translate_match. Could we do that for Zig too?
+Yes, let's do it. Match also should get const/var depending on mut, but maybe add force_type argument and force type only for let.
+Let's fold geometry2 to geometry. Rename geometry's test_translate to test_translate_in_place.
+I will do the removal myself.
+How do you think things are going so far?
+/insights
+/exit

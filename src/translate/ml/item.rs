@@ -3,6 +3,7 @@ use std::collections::HashSet;
 use syn::visit::Visit;
 
 use crate::ast::ml::{Case, ConstructorArguments, ConstructorDeclaration, Expression, LabelDeclaration, Longident, ModuleBinding, ModuleExpr, MutableFlag, Pattern, RecFlag, StructureItem, TypeDeclaration, TypeKind, ValueBinding};
+use crate::scip::Scip;
 use crate::translate::name::{camel_to_snake, escape_ml, screaming_to_snake};
 use super::{Translator, apply, unit_pat};
 use super::integer::integer_type_name;
@@ -32,6 +33,27 @@ fn body_has_exit(block: &syn::Block, exit: Exit) -> bool {
     let mut finder = Find { exit, found: false };
     finder.visit_block(block);
     finder.found
+}
+
+fn field_bases(scip: &Scip, block: &syn::Block) -> HashSet<String> {
+    struct Collect<'a> {
+        scip: &'a Scip,
+        out: HashSet<String>,
+    }
+    impl<'ast> Visit<'ast> for Collect<'_> {
+        fn visit_expr_field(&mut self, ef: &'ast syn::ExprField) {
+            if let syn::Expr::Path(ep) = &*ef.base
+                && let Some(ident) = ep.path.get_ident()
+                && let Some(symbol) = self.scip.symbol_at(&ident.span().into())
+            {
+                self.out.insert(symbol.to_string());
+            }
+            syn::visit::visit_expr_field(self, ef);
+        }
+    }
+    let mut collector = Collect { scip, out: Default::default() };
+    collector.visit_block(block);
+    collector.out
 }
 
 impl Translator {
@@ -227,6 +249,7 @@ impl Translator {
     }
 
     fn translate_callable(&self, signature: &syn::Signature, block: &syn::Block) -> StructureItem {
+        let field_bases = field_bases(&self.scip, block);
         let mut mut_params: Vec<String> = Default::default();
         let mut params: Vec<Pattern> = Default::default();
         for arg in &signature.inputs {
@@ -235,12 +258,18 @@ impl Translator {
                 syn::FnArg::Typed(pt) => {
                     if let syn::Pat::Ident(pi) = &*pt.pat {
                         let name = escape_ml(&pi.ident.to_string());
-                        if pi.mutability.is_some() {
+                        let pat = if pi.mutability.is_some() {
                             mut_params.push(name.clone());
-                            params.push(Pattern::Var(format!("_{name}")));
+                            Pattern::Var(format!("_{name}"))
                         } else {
-                            params.push(Pattern::Var(name));
-                        }
+                            Pattern::Var(name)
+                        };
+                        let pat = if self.needs_constraint(pi, &pt.ty, &field_bases) {
+                            Pattern::Constraint(Box::new(pat), self.translate_type(&pt.ty))
+                        } else {
+                            pat
+                        };
+                        params.push(pat);
                     }
                 }
             }
@@ -282,6 +311,17 @@ impl Translator {
             params,
             expr: body,
         }])
+    }
+
+    fn needs_constraint(&self, pi: &syn::PatIdent, ty: &syn::Type, field_bases: &HashSet<String>) -> bool {
+        let Some(symbol) = self.scip.symbol_at(&pi.ident.span().into()) else { return false };
+        if !field_bases.contains(symbol) {
+            return false;
+        }
+        let Some(module) = self.type_symbol(ty).and_then(|symbol| self.types.get(&symbol)) else {
+            return false;
+        };
+        self.current_module.borrow().as_deref() != Some(module.module.as_str())
     }
 
     pub fn translate_test(&self, f: &syn::ItemFn) -> StructureItem {
