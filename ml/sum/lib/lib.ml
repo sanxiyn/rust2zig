@@ -11,6 +11,12 @@ let sum2 xs =
     !total
 
 let sum_odd xs =
+    let exception Continue in
     let total = ref 0 in
-    Array.iter (fun x -> if x mod 2 = 0 then () else total := !total + x) xs;
+    Array.iter (fun x ->
+        (try
+            if x mod 2 = 0 then
+                raise Continue;
+            total := !total + x
+        with Continue -> ())) xs;
     !total

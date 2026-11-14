@@ -1,7 +1,10 @@
 let position l v =
     let i = ref 0 in
     (try
-        Array.iter (fun e -> if e = v then raise Exit else i := !i + 1) l
+        Array.iter (fun e ->
+            if e = v then
+                raise Exit;
+            i := !i + 1) l
     with Exit -> ());
     if !i = Array.length l then
         None
