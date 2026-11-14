@@ -54,6 +54,18 @@
                     (values (- (point-x center) radius) (- (point-y center) radius) (+ (point-x center) radius) (+ (point-y center) radius))))))
 
 (defun test-translate ()
+  (let* ((p (make-point :x 1 :y 2))
+         (x (point-x p))
+         (y (point-y p)))
+    (declare (type point p)
+             (type (signed-byte 32) x y))
+    (incf x 3)
+    (let ((y (+ y 4)))
+      (declare (type (signed-byte 32) y))
+      (assert (= 4 x))
+      (assert (= 6 y)))))
+
+(defun test-translate-in-place ()
   (let ((p (make-point :x 1 :y 2)))
     (declare (type point p))
     (point-translate p 3 4)
@@ -94,6 +106,7 @@
       (assert (= 3 y1)))))
 
 (test-translate)
+(test-translate-in-place)
 (test-bounding-box-dot)
 (test-bounding-box-line)
 (test-bounding-box-circle)
