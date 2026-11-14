@@ -9,12 +9,52 @@ pub enum Accessor {
 }
 
 pub struct Capture {
-    pub name: String,
+    pub pat: syn::PatIdent,
     pub accessor: Accessor,
-    pub by_ref: bool,
+}
+
+impl Capture {
+    pub fn name(&self) -> String {
+        self.pat.ident.to_string()
+    }
+
+    pub fn by_ref(&self) -> bool {
+        self.pat.by_ref.is_some()
+    }
 }
 
 impl Translator {
+    pub fn pat_captures(&self, pat: &syn::Pat) -> Vec<Capture> {
+        match pat {
+            syn::Pat::Ident(pi) => vec![Capture { pat: pi.clone(), accessor: Accessor::Whole }],
+            syn::Pat::Struct(ps) => ps.fields.iter().filter_map(|field| {
+                let syn::Member::Named(ident) = &field.member else { return None };
+                let syn::Pat::Ident(pi) = &*field.pat else { return None };
+                Some(Capture { pat: pi.clone(), accessor: Accessor::Field(ident.to_string()) })
+            }).collect(),
+            syn::Pat::TupleStruct(pts) => pts.elems.iter().enumerate().filter_map(|(i, elem)| {
+                let syn::Pat::Ident(pi) = elem else { return None };
+                Some(Capture { pat: pi.clone(), accessor: Accessor::Index(i) })
+            }).collect(),
+            _ => Default::default(),
+        }
+    }
+
+    pub fn capture_access(&self, base: Node, capture: &Capture) -> Node {
+        let access = match &capture.accessor {
+            Accessor::Field(field) => Node::FieldAccess(Box::new(base), field.clone()),
+            Accessor::Index(index) => {
+                Node::ArrayAccess(Box::new(base), Box::new(Node::NumberLiteral(index.to_string())))
+            }
+            Accessor::Whole => base,
+        };
+        if capture.by_ref() {
+            Node::AddressOf(Box::new(access))
+        } else {
+            access
+        }
+    }
+
     pub fn pat_name(&self, pat: &syn::Pat) -> String {
         match pat {
             syn::Pat::Ident(pi) => pi.ident.to_string(),
@@ -30,12 +70,7 @@ impl Translator {
                     let node = self.translate_path(&path, PathMode::EnumVariant);
                     return (vec![node], Default::default());
                 }
-                let capture = Capture {
-                    name: pi.ident.to_string(),
-                    accessor: Accessor::Whole,
-                    by_ref: pi.by_ref.is_some(),
-                };
-                (vec![], vec![capture])
+                (vec![], self.pat_captures(pat))
             }
             syn::Pat::Lit(pl) => {
                 let node = match &pl.lit {
@@ -63,33 +98,11 @@ impl Translator {
             }
             syn::Pat::Struct(ps) => {
                 let node = self.translate_path(&ps.path, PathMode::EnumVariant);
-                let mut captures: Vec<Capture> = Default::default();
-                for field in &ps.fields {
-                    if let syn::Member::Named(ident) = &field.member {
-                        if let syn::Pat::Ident(pi) = &*field.pat {
-                            captures.push(Capture {
-                                name: pi.ident.to_string(),
-                                accessor: Accessor::Field(ident.to_string()),
-                                by_ref: pi.by_ref.is_some(),
-                            });
-                        }
-                    }
-                }
-                (vec![node], captures)
+                (vec![node], self.pat_captures(pat))
             }
             syn::Pat::TupleStruct(pts) => {
                 let node = self.translate_path(&pts.path, PathMode::EnumVariant);
-                let mut captures: Vec<Capture> = Default::default();
-                for (i, elem) in pts.elems.iter().enumerate() {
-                    if let syn::Pat::Ident(pi) = elem {
-                        captures.push(Capture {
-                            name: pi.ident.to_string(),
-                            accessor: Accessor::Index(i),
-                            by_ref: pi.by_ref.is_some(),
-                        });
-                    }
-                }
-                (vec![node], captures)
+                (vec![node], self.pat_captures(pat))
             }
             syn::Pat::Wild(_) => (vec![], Default::default()),
             _ => {

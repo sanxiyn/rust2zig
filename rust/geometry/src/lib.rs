@@ -35,6 +35,16 @@ pub fn bounding_box(s: &Shape) -> (i32, i32, i32, i32) {
 
 #[test]
 fn test_translate() {
+    let p = Point { x: 1, y: 2 };
+    let Point { mut x, y } = p;
+    x += 3;
+    let y = y + 4;
+    assert_eq!(4, x);
+    assert_eq!(6, y);
+}
+
+#[test]
+fn test_translate_in_place() {
     let mut p = Point { x: 1, y: 2 };
     p.translate(3, 4);
     let q = Point { x: 4, y: 6 };

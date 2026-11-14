@@ -2,6 +2,15 @@ open Lib
 
 let () =
     let p = { Point.x = 1; y = 2 } in
+    let { Point.x; y } = p in
+    let x = ref x in
+    x := !x + 3;
+    let y = y + 4 in
+    assert (4 = !x);
+    assert (6 = y)
+
+let () =
+    let p = { Point.x = 1; y = 2 } in
     Point.translate p 3 4;
     let q = { Point.x = 4; y = 6 } in
     assert (p = q);

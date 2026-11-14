@@ -51,6 +51,16 @@ fn boundingBox(s: *const Shape) struct { i32, i32, i32, i32 } {
 }
 
 test "translate" {
+    const p: Point = Point{ .x = 1, .y = 2 };
+    var x: i32 = p.x;
+    const y: i32 = p.y;
+    x += 3;
+    const y2: i32 = y + 4;
+    try std.testing.expectEqual(4, x);
+    try std.testing.expectEqual(6, y2);
+}
+
+test "translate_in_place" {
     var p: Point = Point{ .x = 1, .y = 2 };
     p.translate(3, 4);
     const q: Point = Point{ .x = 4, .y = 6 };

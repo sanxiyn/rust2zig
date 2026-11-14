@@ -1,4 +1,4 @@
-use crate::ast::zig::{BLOCK_LABEL, Capture, Node, SwitchArm, SwitchBody, Var};
+use crate::ast::zig::{BLOCK_LABEL, Capture, Node, SwitchArm, SwitchBody};
 use crate::translate::name::camel_to_snake;
 use crate::translate::ty::{expr_type, int_bits, peel_ref};
 use super::{PathMode, Translator, dotted_name};
@@ -278,7 +278,7 @@ impl Translator {
             _ => None,
         };
         let (pattern, captures) = self.translate_match_pat(&arm.pat);
-        let by_ref = captures.iter().any(|capture| capture.by_ref);
+        let by_ref = captures.iter().any(|capture| capture.by_ref());
         let use_block = captures.len() > 1
             || captures.iter().any(|capture| matches!(capture.accessor, Accessor::Field(_)));
         let clears = self.prelude_clear_flags(&arm.body);
@@ -286,21 +286,11 @@ impl Translator {
         if use_block {
             let payload = format!("_{}", variant.unwrap());
             let mut bindings: Vec<Node> = captures.iter().map(|capture| {
-                let mut access = match &capture.accessor {
-                    Accessor::Index(index) => Node::ArrayAccess(
-                        Box::new(Node::Identifier(payload.clone())),
-                        Box::new(Node::NumberLiteral(index.to_string())),
-                    ),
-                    Accessor::Field(field) => Node::FieldAccess(
-                        Box::new(Node::Identifier(payload.clone())),
-                        field.clone(),
-                    ),
-                    Accessor::Whole => Node::Identifier(payload.clone()),
-                };
-                if capture.by_ref {
-                    access = Node::AddressOf(Box::new(access));
+                let access = self.capture_access(Node::Identifier(payload.clone()), capture);
+                Node::SimpleVarDecl {
+                    var: self.var_of(&capture.pat, false, false),
+                    expr: Some(Box::new(access)),
                 }
-                Node::SimpleVarDecl { var: Var { is_const: true, name: capture.name.clone(), ty: None }, expr: Some(Box::new(access)) }
             }).collect();
             bindings.extend(clears);
             SwitchArm {
@@ -309,14 +299,14 @@ impl Translator {
                 body: SwitchBody::Block { bindings, result },
             }
         } else if !clears.is_empty() {
-            let capture = captures.first().map(|capture| Capture { name: capture.name.clone(), by_ref });
+            let capture = captures.first().map(|capture| Capture { name: capture.name(), by_ref });
             SwitchArm {
                 pattern,
                 capture,
                 body: SwitchBody::Block { bindings: clears, result },
             }
         } else {
-            let capture = captures.first().map(|capture| Capture { name: capture.name.clone(), by_ref });
+            let capture = captures.first().map(|capture| Capture { name: capture.name(), by_ref });
             SwitchArm { pattern, capture, body: SwitchBody::Expr(result) }
         }
     }

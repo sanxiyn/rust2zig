@@ -50,7 +50,7 @@ impl Translator {
     fn translate_local(&self, local: &syn::Local) -> Vec<Node> {
         if let syn::Pat::Tuple(pt) = &local.pat {
             let vars = pt.elems.iter().map(|elem| match elem {
-                syn::Pat::Ident(pi) => self.var_of(pi, false),
+                syn::Pat::Ident(pi) => self.var_of(pi, false, true),
                 _ => Var { is_const: true, name: "_".to_string(), ty: None },
             }).collect();
             let init = &local.init.as_ref().unwrap().expr;
@@ -58,6 +58,16 @@ impl Translator {
             let expr = self.translate_expr(init);
             nodes.push(Node::AssignDestructure(vars, Box::new(expr)));
             return nodes;
+        }
+        if let syn::Pat::Struct(_) = &local.pat {
+            let init = &local.init.as_ref().unwrap().expr;
+            let syn::Expr::Path(_) = &**init else {
+                return vec![Node::Todo("local".to_string())];
+            };
+            return self.pat_captures(&local.pat).iter().map(|capture| Node::SimpleVarDecl {
+                var: self.var_of(&capture.pat, false, true),
+                expr: Some(Box::new(self.capture_access(self.translate_expr(init), capture))),
+            }).collect();
         }
         let pat = match &local.pat {
             syn::Pat::Type(pt) => &*pt.pat,
@@ -86,7 +96,7 @@ impl Translator {
         let (needs_var, needs_defer, needs_flag) = self.local_drop_flags(&pi.ident);
         let expr = self.translate_expr(init);
         nodes.push(Node::SimpleVarDecl {
-            var: self.var_of(pi, needs_var),
+            var: self.var_of(pi, needs_var, true),
             expr: Some(Box::new(expr)),
         });
         if needs_flag {
@@ -107,10 +117,10 @@ impl Translator {
         nodes
     }
 
-    fn var_of(&self, pi: &syn::PatIdent, force_var: bool) -> Var {
+    pub fn var_of(&self, pi: &syn::PatIdent, force_var: bool, force_type: bool) -> Var {
         let is_const = pi.mutability.is_none() && !force_var;
         let name = pi.ident.to_string();
-        let ty = if let Some(ty) = self.scip.type_at(&pi.ident.span().into()) {
+        let ty = if force_type && let Some(ty) = self.scip.type_at(&pi.ident.span().into()) {
             let ty = self.translate_type(&ty);
             Some(Box::new(ty))
         } else {
